@@ -17,6 +17,12 @@ struct ipa_dma_channel;
 #define GSI_RING_ELEMENT_SIZE	16	/* bytes; must be a power of 2 */
 
 /**
+ * ipa_dma_trans_move_pending() - Mark a DMA transaction pending
+ * @trans:	Transaction whose state is to be updated
+ */
+void ipa_dma_trans_move_pending(struct ipa_dma_trans *trans);
+
+/**
  * ipa_dma_trans_move_complete() - Mark a DMA transaction completed
  * @trans:	Transaction whose state is to be updated
  */

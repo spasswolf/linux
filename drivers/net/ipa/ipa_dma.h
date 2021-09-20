@@ -16,8 +16,12 @@
 #include "ipa_version.h"
 
 /* Maximum number of channels and event rings supported by the driver */
-#define GSI_CHANNEL_COUNT_MAX	28
+#define GSI_CHANNEL_COUNT_MAX		28
+#define BAM_CHANNEL_COUNT_MAX		20
 #define IPA_DMA_EVT_RING_COUNT_MAX	28
+#define IPA_CHANNEL_COUNT_MAX	MAX(GSI_CHANNEL_COUNT_MAX, \
+				    BAM_CHANNEL_COUNT_MAX)
+#define MAX(a, b)		((a > b) ? a : b)
 
 /* Maximum TLV FIFO size for a channel; 64 here is arbitrary (and high) */
 #define GSI_TLV_MAX		64
@@ -112,7 +116,8 @@ struct ipa_dma_channel {
 	struct ipa_dma_ring tre_ring;
 	u32 evt_ring_id;
 
-	/* The following counts are used only for TX endpoints */
+	struct dma_chan *dma_chan;
+
 	u64 byte_count;			/* total # bytes transferred */
 	u64 trans_count;		/* total # transactions */
 	u64 queued_byte_count;		/* last reported queued byte count */
@@ -186,6 +191,7 @@ struct ipa_dma {
 	struct ipa_dma_ops *ops;
 };
 
+extern struct ipa_dma_ops bam_ops;
 extern struct ipa_dma_ops gsi_ops;
 
 #endif /* _IPA_DMA_H_ */
