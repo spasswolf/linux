@@ -10,6 +10,7 @@
 #include <linux/refcount.h>
 #include <linux/completion.h>
 #include <linux/dma-direction.h>
+#include <linux/dmaengine.h>
 
 #include "ipa_cmd.h"
 
@@ -64,6 +65,7 @@ struct ipa_dma_trans {
 	};
 	struct scatterlist *sgl;
 	enum dma_data_direction direction;
+	dma_cookie_t cookie;
 
 	refcount_t refcount;
 	struct completion completion;
