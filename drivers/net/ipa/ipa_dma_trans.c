@@ -262,7 +262,7 @@ static void ipa_dma_trans_move_committed(struct ipa_dma_trans *trans)
 }
 
 /* Move committed transactions to pending state */
-static void ipa_dma_trans_move_pending(struct ipa_dma_trans *trans)
+void ipa_dma_trans_move_pending(struct ipa_dma_trans *trans)
 {
 	struct ipa_dma_channel *channel = &trans->ipa_dma->channel[trans->channel_id];
 	struct ipa_dma_trans_info *trans_info = &channel->trans_info;
