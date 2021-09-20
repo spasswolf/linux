@@ -61,12 +61,15 @@
  * core.  The GSI implements a set of "channels" used for communication
  * between the AP and the IPA.
  *
- * The IPA layer uses GSI channels to implement its "endpoints".  And while
- * a GSI channel carries data between the AP and the IPA, a pair of IPA
- * endpoints is used to carry traffic between two EEs.  Specifically, the main
- * modem network interface is implemented by two pairs of endpoints:  a TX
+ * The IPA layer uses GSI channels or BAM pipes to implement its "endpoints".
+ * And while a GSI channel carries data between the AP and the IPA, a pair of
+ * IPA endpoints is used to carry traffic between two EEs.  Specifically, the
+ * main modem network interface is implemented by two pairs of endpoints:  a TX
  * endpoint on the AP coupled with an RX endpoint on the modem; and another
  * RX endpoint on the AP receiving data from a TX endpoint on the modem.
+ *
+ * For BAM based transport, a pair of BAM pipes are used for TX and RX between
+ * the AP and IPA, and between IPA and other EEs.
  */
 
 /* The name of the GSI firmware file relative to /lib/firmware */
@@ -863,8 +866,10 @@ static int ipa_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_reg_exit;
 
-	/* GSI is the only supported DMA backend at the moment. */
-	ipa->ipa_dma.ops = &gsi_ops;
+	if (ipa->version < IPA_VERSION_3_0)
+		ipa->ipa_dma.ops = &bam_ops;
+	else
+		ipa->ipa_dma.ops = &gsi_ops;
 
 	ret = ipa->ipa_dma.ops->init(&ipa->ipa_dma, pdev, ipa->version,
 				  data->endpoint_count, data->endpoint_data);
