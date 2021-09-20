@@ -43,6 +43,25 @@ struct ipa_interrupt {
 	u32 enabled;
 };
 
+static bool ipa_interrupt_check_fixup(enum ipa_irq_id *irq_id, enum ipa_version version)
+{
+	switch (*irq_id) {
+	case IPA_IRQ_EOT_COAL:
+		return version < IPA_VERSION_3_5;
+	case IPA_IRQ_DCMP:
+		return version < IPA_VERSION_4_5;
+	case IPA_IRQ_TLV_LEN_MIN_DSM:
+		return version >= IPA_VERSION_4_5;
+	default:
+		break;
+	}
+
+	if (*irq_id >= IPA_IRQ_DRBIP_PKT_EXCEED_MAX_SIZE_EN)
+		return version >= IPA_VERSION_4_9;
+
+	return true;
+}
+
 /* Process a particular interrupt type that has been received */
 static void ipa_interrupt_process(struct ipa_interrupt *interrupt, u32 irq_id)
 {
@@ -139,6 +158,9 @@ static void ipa_interrupt_enabled_update(struct ipa *ipa)
 /* Enable an IPA interrupt type */
 void ipa_interrupt_enable(struct ipa *ipa, enum ipa_irq_id ipa_irq)
 {
+	if (!ipa_interrupt_check_fixup(&ipa_irq, ipa->version))
+		return;
+
 	/* Update the IPA interrupt mask to enable it */
 	ipa->interrupt->enabled |= BIT(ipa_irq);
 	ipa_interrupt_enabled_update(ipa);
@@ -147,6 +169,9 @@ void ipa_interrupt_enable(struct ipa *ipa, enum ipa_irq_id ipa_irq)
 /* Disable an IPA interrupt type */
 void ipa_interrupt_disable(struct ipa *ipa, enum ipa_irq_id ipa_irq)
 {
+	if (!ipa_interrupt_check_fixup(&ipa_irq, ipa->version))
+		return;
+
 	/* Update the IPA interrupt mask to disable it */
 	ipa->interrupt->enabled &= ~BIT(ipa_irq);
 	ipa_interrupt_enabled_update(ipa);
