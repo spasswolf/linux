@@ -496,6 +496,10 @@ static bool ipa_endpoint_aggr_active(struct ipa_endpoint *endpoint)
 	const struct reg *reg;
 	u32 val;
 
+	/* IPA v2.* doesn't support aggregation */
+	if (ipa->version <= IPA_VERSION_2_6L)
+		return false;
+
 	WARN_ON(!test_bit(endpoint_id, ipa->available));
 
 	reg = ipa_reg(ipa, STATE_AGGR_ACTIVE);
@@ -577,6 +581,11 @@ void ipa_endpoint_modem_pause_all(struct ipa *ipa, bool enable)
 	struct ipa_dma *ipa_dma = &ipa->ipa_dma;
 	u32 endpoint_id = 0;
 
+	 /* Pausing is not supported on IPA v2.6L
+	 */
+	if (ipa->version <= IPA_VERSION_2_6L)
+		return;
+
 	while (endpoint_id < ipa->endpoint_count) {
 		struct ipa_endpoint *endpoint = &ipa->endpoint[endpoint_id++];
 
@@ -599,6 +608,7 @@ int ipa_endpoint_modem_exception_reset_all(struct ipa *ipa)
 {
 	struct ipa_dma_trans *trans;
 	u32 endpoint_id;
+	u32 value = 0, value_mask = ~0;
 	u32 count;
 
 	/* We need one command per modem TX endpoint, plus the commands
@@ -610,6 +620,11 @@ int ipa_endpoint_modem_exception_reset_all(struct ipa *ipa)
 		dev_err(&ipa->pdev->dev,
 			"no transaction to reset modem exception endpoints\n");
 		return -EBUSY;
+	}
+
+	if (ipa->version <= IPA_VERSION_2_6L) {
+		value = GENMASK(22, 22);
+		value_mask = GENMASK(22, 22);
 	}
 
 	for_each_set_bit(endpoint_id, ipa->defined, ipa->endpoint_count) {
@@ -629,7 +644,7 @@ int ipa_endpoint_modem_exception_reset_all(struct ipa *ipa)
 		 * means status is disabled on the endpoint, and as a
 		 * result all other fields in the register are ignored.
 		 */
-		ipa_cmd_register_write_add(trans, offset, 0, ~0, false);
+		ipa_cmd_register_write_add(trans, offset, value, value_mask, false);
 	}
 
 	ipa_cmd_pipeline_clear_add(trans);
@@ -1645,7 +1660,8 @@ void ipa_endpoint_default_route_set(struct ipa *ipa, u32 endpoint_id)
 	val |= reg_bit(reg, ROUTE_DEF_HDR_TABLE);
 	/* ROUTE_DEF_HDR_OFST is 0 */
 	val |= reg_encode(reg, ROUTE_FRAG_DEF_PIPE, endpoint_id);
-	val |= reg_bit(reg, ROUTE_DEF_RETAIN_HDR);
+	if (ipa->version > IPA_VERSION_2_6L)
+		val |= reg_bit(reg, ROUTE_DEF_RETAIN_HDR);
 
 	iowrite32(val, ipa->reg_virt + reg_offset(reg));
 }
@@ -1805,8 +1821,10 @@ static void ipa_endpoint_program(struct ipa_endpoint *endpoint)
 			ipa_endpoint_init_hol_block_disable(endpoint);
 	}
 	ipa_endpoint_init_deaggr(endpoint);
-	ipa_endpoint_init_rsrc_grp(endpoint);
-	ipa_endpoint_init_seq(endpoint);
+	if (endpoint->ipa->version > IPA_VERSION_2_6L) {
+		ipa_endpoint_init_rsrc_grp(endpoint);
+		ipa_endpoint_init_seq(endpoint);
+	}
 	ipa_endpoint_status(endpoint);
 }
 
@@ -2019,19 +2037,30 @@ int ipa_endpoint_config(struct ipa *ipa)
 	/* Find out about the endpoints supplied by the hardware, and ensure
 	 * the highest one doesn't exceed the number supported by software.
 	 */
-	reg = ipa_reg(ipa, FLAVOR_0);
-	val = ioread32(ipa->reg_virt + reg_offset(reg));
+	if (ipa->version <= IPA_VERSION_2_6L) {
+		// FIXME Not used anywhere?
+		if (ipa->version == IPA_VERSION_2_6L) {
+			reg = ipa_reg(ipa, ENABLED_PIPES);
+			val = ioread32(ipa->reg_virt + ipa_reg_offset(reg));
+		}
+		/* IPA v2.6L supports 20 pipes */
+		ipa->available = ipa->filter_map;
+		return 0;
+	} else {
+		reg = ipa_reg(ipa, FLAVOR_0);
+		val = ioread32(ipa->reg_virt + reg_offset(reg));
 
-	/* Our RX is an IPA producer; our TX is an IPA consumer. */
-	tx_count = reg_decode(reg, MAX_CONS_PIPES, val);
-	rx_count = reg_decode(reg, MAX_PROD_PIPES, val);
-	rx_base = reg_decode(reg, PROD_LOWEST, val);
+		/* Our RX is an IPA producer; our TX is an IPA consumer. */
+		tx_count = reg_decode(reg, MAX_CONS_PIPES, val);
+		rx_count = reg_decode(reg, MAX_PROD_PIPES, val);
+		rx_base = reg_decode(reg, PROD_LOWEST, val);
 
-	limit = rx_base + rx_count;
-	if (limit > IPA_ENDPOINT_MAX) {
-		dev_err(dev, "too many endpoints, %u > %u\n",
-			limit, IPA_ENDPOINT_MAX);
-		return -EINVAL;
+		limit = rx_base + rx_count;
+		if (limit > IPA_ENDPOINT_MAX) {
+			dev_err(dev, "too many endpoints, %u > %u\n",
+				limit, IPA_ENDPOINT_MAX);
+			return -EINVAL;
+		}
 	}
 
 	/* Until IPA v5.0, the max endpoint ID was 32 */
@@ -2175,6 +2204,9 @@ int ipa_endpoint_init(struct ipa *ipa, u32 count,
 		if (data->ee_id == DMA_EE_MODEM && data->toward_ipa)
 			ipa->modem_tx_count++;
 	}
+
+	if (ipa->version <= IPA_VERSION_2_6L)
+		filtered = 0x1fffff;
 
 	/* Make sure the set of filtered endpoints is valid */
 	if (!ipa_filtered_valid(ipa, filtered)) {
