@@ -68,6 +68,11 @@
  * - The INDICATION_REGISTER request and INIT_COMPLETE indication are
  *   optional for non-initial modem boots, and have no bearing on the
  *   determination of when things are "ready"
+ *
+ * Note that on IPA v2.x, the modem doesn't send a DRIVER_INIT_COMPLETE
+ * request. Thus, we rely on the uc's IPA_UC_RESPONSE_INIT_COMPLETED to know
+ * when the uc is ready. The rest of the process is the same on IPA v2.x and
+ * later IPA versions
  */
 
 #define IPA_HOST_SERVICE_SVC_ID		0x31
@@ -346,34 +351,42 @@ init_modem_driver_req(struct ipa_qmi *ipa_qmi)
 			req.hdr_proc_ctx_tbl_info.start + mem->size - 1;
 	}
 
-	/* Nothing to report for the compression table (zip_tbl_info) */
-
-	mem = ipa_mem_find(ipa, IPA_MEM_V4_ROUTE_HASHED);
+	mem = &ipa->mem[IPA_MEM_ZIP];
 	if (mem->size) {
-		req.v4_hash_route_tbl_info_valid = 1;
-		req.v4_hash_route_tbl_info.start =
+		req.zip_tbl_info_valid = 1;
+		req.zip_tbl_info.start = ipa->mem_offset + mem->offset;
+		req.zip_tbl_info.end = ipa->mem_offset + mem->size - 1;
+	}
+
+	/* The hashed fields are only valid for IPA v3.0+ */
+	if (ipa->version > IPA_VERSION_2_6L) {
+		mem = ipa_mem_find(ipa, IPA_MEM_V4_ROUTE_HASHED);
+		if (mem->size) {
+			req.v4_hash_route_tbl_info_valid = 1;
+			req.v4_hash_route_tbl_info.start =
+					ipa->mem_offset + mem->offset;
+			req.v4_hash_route_tbl_info.end = modem_route_count - 1;
+		}
+
+		mem = ipa_mem_find(ipa, IPA_MEM_V6_ROUTE_HASHED);
+		if (mem->size) {
+			req.v6_hash_route_tbl_info_valid = 1;
+			req.v6_hash_route_tbl_info.start =
 				ipa->mem_offset + mem->offset;
-		req.v4_hash_route_tbl_info.end = modem_route_count - 1;
-	}
+			req.v6_hash_route_tbl_info.end = modem_route_count - 1;
+		}
 
-	mem = ipa_mem_find(ipa, IPA_MEM_V6_ROUTE_HASHED);
-	if (mem->size) {
-		req.v6_hash_route_tbl_info_valid = 1;
-		req.v6_hash_route_tbl_info.start =
-			ipa->mem_offset + mem->offset;
-		req.v6_hash_route_tbl_info.end = modem_route_count - 1;
-	}
+		mem = ipa_mem_find(ipa, IPA_MEM_V4_FILTER_HASHED);
+		if (mem->size) {
+			req.v4_hash_filter_tbl_start_valid = 1;
+			req.v4_hash_filter_tbl_start = ipa->mem_offset + mem->offset;
+		}
 
-	mem = ipa_mem_find(ipa, IPA_MEM_V4_FILTER_HASHED);
-	if (mem->size) {
-		req.v4_hash_filter_tbl_start_valid = 1;
-		req.v4_hash_filter_tbl_start = ipa->mem_offset + mem->offset;
-	}
-
-	mem = ipa_mem_find(ipa, IPA_MEM_V6_FILTER_HASHED);
-	if (mem->size) {
-		req.v6_hash_filter_tbl_start_valid = 1;
-		req.v6_hash_filter_tbl_start = ipa->mem_offset + mem->offset;
+		mem = ipa_mem_find(ipa, IPA_MEM_V6_FILTER_HASHED);
+		if (mem->size) {
+			req.v6_hash_filter_tbl_start_valid = 1;
+			req.v6_hash_filter_tbl_start = ipa->mem_offset + mem->offset;
+		}
 	}
 
 	/* The stats fields are only valid for IPA v4.0+ */
@@ -522,6 +535,21 @@ err_server_handle_release:
 	memset(&ipa_qmi->server_handle, 0, sizeof(ipa_qmi->server_handle));
 
 	return ret;
+}
+
+/* With IPA v2 modem is not required to send DRIVER_INIT_COMPLETE request to AP.
+ * We start operation as soon as IPA_UC_RESPONSE_INIT_COMPLETED irq is triggered.
+ */
+void ipa_qmi_signal_uc_loaded(struct ipa *ipa)
+{
+	struct ipa_qmi *ipa_qmi = &ipa->qmi;
+
+	/* This is needed only on IPA 2.x */
+	if (ipa->version > IPA_VERSION_2_6L)
+		return;
+
+	ipa_qmi->uc_ready = true;
+	ipa_qmi_ready(ipa_qmi);
 }
 
 /* Tear down IPA QMI handles */
