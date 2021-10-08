@@ -2207,7 +2207,7 @@ int ipa_endpoint_init(struct ipa *ipa, u32 count,
 	}
 
 	if (ipa->version <= IPA_VERSION_2_6L)
-		filtered = 0x1fffff;
+		filtered = 0x3fff;
 
 	/* Make sure the set of filtered endpoints is valid */
 	if (!ipa_filtered_valid(ipa, filtered)) {
