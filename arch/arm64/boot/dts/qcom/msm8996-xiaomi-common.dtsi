@@ -266,6 +266,22 @@
 	vcca-supply = <&vreg_l28a_0p925>;
 };
 
+&gpu {
+	status = "okay";
+};
+
+&ipa_bam {
+	status = "okay";
+};
+
+&ipa {
+	status = "okay";
+};
+
+&mdss {
+	status = "okay";
+};
+
 &mmcc {
 	vdd-gfx-supply = <&vdd_gfx>;
 };
