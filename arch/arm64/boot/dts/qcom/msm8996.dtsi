@@ -2069,6 +2069,45 @@
 			};
 		};
 
+		ipa_bam: dma-controller@684000 {
+			compatible = "qcom,bam-v1.7.0";
+			reg = <0x00684000 0x26934>;
+			#dma-cells = <1>;
+			interrupts = <GIC_SPI 432 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&rpmcc RPM_SMD_IPA_CLK>;
+			clock-names = "bam_clk";
+			num-channels = <31>;
+			qcom,controlled-remotely;
+			qcom,ee = <0>;
+			qcom,num-ees = <1>;
+
+			status = "disabled";
+		};
+
+		ipa: ipa@6c0000 {
+			compatible = "qcom,msm8996-ipa";
+			reg = <0x006c0000 0x5000>,
+			      <0x006c5000 0x2000>;
+			reg-names = "ipa-reg", "ipa-shared";
+
+			interrupts = <GIC_SPI 333 IRQ_TYPE_EDGE_RISING>;
+			interrupt-names = "ipa";
+
+			clocks = <&rpmcc RPM_SMD_IPA_CLK>;
+			clock-names = "core";
+
+			interconnects = <&a2noc MASTER_IPA &bimc SLAVE_EBI_CH0>,
+					<&a2noc MASTER_IPA &snoc SLAVE_IMEM>;
+			interconnect-names = "memory", "imem";
+
+			dmas = <&ipa_bam 2>, <&ipa_bam 3>, <&ipa_bam 4>, <&ipa_bam 5>,
+			       <&ipa_bam 6>, <&ipa_bam 7>, <&ipa_bam 8>, <&ipa_bam 9>;
+			dma-names = "ap_lan_rx", "cmd_tx", "ap_modem_tx", "ap_modem_rx",
+				    "modem_lan_tx", "modem_cmd_tx", "modem_lan_rx", "modem_ap_rx";
+
+			status = "disabled";
+		};
+
 		camss: camss@a00000 {
 			compatible = "qcom,msm8996-camss";
 			reg = <0x00a34000 0x1000>,
