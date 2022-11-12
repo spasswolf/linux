@@ -151,7 +151,7 @@ enum ipa_replenish_flag {
  */
 struct ipa_endpoint {
 	struct ipa *ipa;
-	enum gsi_ee_id ee_id;
+	enum dma_ee_id ee_id;
 	u32 channel_id;
 	u32 endpoint_id;
 	bool toward_ipa;
