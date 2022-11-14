@@ -108,7 +108,7 @@ int ipa_mem_setup(struct ipa *ipa)
 	ipa_mem_zero_region_add(trans, IPA_MEM_AP_PROC_CTX);
 	ipa_mem_zero_region_add(trans, IPA_MEM_MODEM);
 
-	gsi_trans_commit_wait(trans);
+	trans->gsi->ops->trans_commit_wait(trans);
 
 	/* Tell the hardware where the processing context area is located */
 	mem = ipa_mem_find(ipa, IPA_MEM_MODEM_PROC_CTX);
@@ -429,7 +429,7 @@ int ipa_mem_zero_modem(struct ipa *ipa)
 	ipa_mem_zero_region_add(trans, IPA_MEM_MODEM_PROC_CTX);
 	ipa_mem_zero_region_add(trans, IPA_MEM_MODEM);
 
-	gsi_trans_commit_wait(trans);
+	trans->gsi->ops->trans_commit_wait(trans);
 
 	return 0;
 }
