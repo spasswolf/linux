@@ -7,7 +7,7 @@
 #include <linux/types.h>
 
 #include "ipa_gsi.h"
-#include "gsi_trans.h"
+#include "ipa_dma_trans.h"
 #include "ipa.h"
 #include "ipa_endpoint.h"
 #include "ipa_data.h"
