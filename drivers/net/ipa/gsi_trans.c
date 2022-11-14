@@ -238,11 +238,12 @@ gsi_channel_trans_mapped(struct gsi_channel *channel, u32 index)
 /* Return the oldest completed transaction for a channel (or null) */
 struct gsi_trans *gsi_channel_trans_complete(struct gsi_channel *channel)
 {
+	struct gsi *gsi = channel->gsi;
 	struct gsi_trans_info *trans_info = &channel->trans_info;
 	u16 trans_id = trans_info->completed_id;
 
 	if (trans_id == trans_info->pending_id) {
-		gsi_channel_update(channel);
+		gsi->ops->channel_update(channel);
 		if (trans_id == trans_info->pending_id)
 			return NULL;
 	}
@@ -544,7 +545,8 @@ static void gsi_trans_tre_fill(struct gsi_tre *dest_tre, dma_addr_t addr,
  */
 static void __gsi_trans_commit(struct gsi_trans *trans, bool ring_db)
 {
-	struct gsi_channel *channel = &trans->gsi->channel[trans->channel_id];
+	struct gsi *gsi = trans->gsi;
+	struct gsi_channel *channel = &gsi->channel[trans->channel_id];
 	struct gsi_ring *tre_ring = &channel->tre_ring;
 	enum ipa_cmd_opcode opcode = IPA_CMD_NONE;
 	bool bei = channel->toward_ipa;
@@ -564,7 +566,7 @@ static void __gsi_trans_commit(struct gsi_trans *trans, bool ring_db)
 	 */
 	cmd_opcode = channel->command ? &trans->cmd_opcode[0] : NULL;
 	avail = tre_ring->count - tre_ring->index % tre_ring->count;
-	dest_tre = gsi_ring_virt(tre_ring, tre_ring->index);
+	dest_tre = gsi->ops->ring_virt(tre_ring, tre_ring->index);
 	for_each_sg(trans->sgl, sg, trans->used_count, i) {
 		bool last_tre = i == trans->used_count - 1;
 		dma_addr_t addr = sg_dma_address(sg);
@@ -572,7 +574,7 @@ static void __gsi_trans_commit(struct gsi_trans *trans, bool ring_db)
 
 		byte_count += len;
 		if (!avail--)
-			dest_tre = gsi_ring_virt(tre_ring, 0);
+			dest_tre = gsi->ops->ring_virt(tre_ring, 0);
 		if (cmd_opcode)
 			opcode = *cmd_opcode++;
 
@@ -586,7 +588,7 @@ static void __gsi_trans_commit(struct gsi_trans *trans, bool ring_db)
 
 	trans->len = byte_count;
 	if (channel->toward_ipa)
-		gsi_trans_tx_committed(trans);
+		gsi->ops->trans_tx_committed(trans);
 
 	gsi_trans_move_committed(trans);
 
@@ -594,9 +596,9 @@ static void __gsi_trans_commit(struct gsi_trans *trans, bool ring_db)
 	if (ring_db || !atomic_read(&channel->trans_info.tre_avail)) {
 		/* Report what we're handing off to hardware for TX channels */
 		if (channel->toward_ipa)
-			gsi_trans_tx_queued(trans);
+			gsi->ops->trans_tx_queued(trans);
 		gsi_trans_move_pending(trans);
-		gsi_channel_doorbell(channel);
+		gsi->ops->channel_doorbell(channel);
 	}
 }
 
@@ -683,11 +685,11 @@ int gsi_trans_read_byte(struct gsi *gsi, u32 channel_id, dma_addr_t addr)
 
 	/* Now fill the reserved TRE and tell the hardware */
 
-	dest_tre = gsi_ring_virt(tre_ring, tre_ring->index);
+	dest_tre = gsi->ops->ring_virt(tre_ring, tre_ring->index);
 	gsi_trans_tre_fill(dest_tre, addr, 1, true, false, IPA_CMD_NONE);
 
 	tre_ring->index++;
-	gsi_channel_doorbell(channel);
+	gsi->ops->channel_doorbell(channel);
 
 	return 0;
 }

@@ -361,7 +361,7 @@ static void gsi_irq_disable(struct gsi *gsi)
 }
 
 /* Return the virtual address associated with a ring index */
-void *gsi_ring_virt(struct gsi_ring *ring, u32 index)
+static void *gsi_ring_virt(struct gsi_ring *ring, u32 index)
 {
 	/* Note: index *must* be used modulo the ring count here */
 	return ring->virt + (index % ring->count) * GSI_RING_ELEMENT_SIZE;
@@ -942,7 +942,7 @@ static int __gsi_channel_start(struct gsi_channel *channel, bool resume)
 }
 
 /* Start an allocated GSI channel */
-int gsi_channel_start(struct gsi *gsi, u32 channel_id)
+static int gsi_channel_start(struct gsi *gsi, u32 channel_id)
 {
 	struct gsi_channel *channel = &gsi->channel[channel_id];
 	int ret;
@@ -997,7 +997,7 @@ static int __gsi_channel_stop(struct gsi_channel *channel, bool suspend)
 }
 
 /* Stop a started channel */
-int gsi_channel_stop(struct gsi *gsi, u32 channel_id)
+static int gsi_channel_stop(struct gsi *gsi, u32 channel_id)
 {
 	struct gsi_channel *channel = &gsi->channel[channel_id];
 	int ret;
@@ -1014,7 +1014,7 @@ int gsi_channel_stop(struct gsi *gsi, u32 channel_id)
 }
 
 /* Reset and reconfigure a channel, (possibly) enabling the doorbell engine */
-void gsi_channel_reset(struct gsi *gsi, u32 channel_id, bool doorbell)
+static void gsi_channel_reset(struct gsi *gsi, u32 channel_id, bool doorbell)
 {
 	struct gsi_channel *channel = &gsi->channel[channel_id];
 
@@ -1034,7 +1034,7 @@ void gsi_channel_reset(struct gsi *gsi, u32 channel_id, bool doorbell)
 }
 
 /* Stop a started channel for suspend */
-int gsi_channel_suspend(struct gsi *gsi, u32 channel_id)
+static int gsi_channel_suspend(struct gsi *gsi, u32 channel_id)
 {
 	struct gsi_channel *channel = &gsi->channel[channel_id];
 	int ret;
@@ -1050,7 +1050,7 @@ int gsi_channel_suspend(struct gsi *gsi, u32 channel_id)
 }
 
 /* Resume a suspended channel (starting if stopped) */
-int gsi_channel_resume(struct gsi *gsi, u32 channel_id)
+static int gsi_channel_resume(struct gsi *gsi, u32 channel_id)
 {
 	struct gsi_channel *channel = &gsi->channel[channel_id];
 
@@ -1058,18 +1058,18 @@ int gsi_channel_resume(struct gsi *gsi, u32 channel_id)
 }
 
 /* Prevent all GSI interrupts while suspended */
-void gsi_suspend(struct gsi *gsi)
+static void gsi_suspend(struct gsi *gsi)
 {
 	disable_irq(gsi->irq);
 }
 
 /* Allow all GSI interrupts again when resuming */
-void gsi_resume(struct gsi *gsi)
+static void gsi_resume(struct gsi *gsi)
 {
 	enable_irq(gsi->irq);
 }
 
-void gsi_trans_tx_committed(struct gsi_trans *trans)
+static void gsi_trans_tx_committed(struct gsi_trans *trans)
 {
 	struct gsi_channel *channel = &trans->gsi->channel[trans->channel_id];
 
@@ -1080,7 +1080,7 @@ void gsi_trans_tx_committed(struct gsi_trans *trans)
 	trans->byte_count = channel->byte_count;
 }
 
-void gsi_trans_tx_queued(struct gsi_trans *trans)
+static void gsi_trans_tx_queued(struct gsi_trans *trans)
 {
 	u32 channel_id = trans->channel_id;
 	struct gsi *gsi = trans->gsi;
@@ -1585,7 +1585,7 @@ static void gsi_evt_ring_id_free(struct gsi *gsi, u32 evt_ring_id)
 }
 
 /* Ring a channel doorbell, reporting the first un-filled entry */
-void gsi_channel_doorbell(struct gsi_channel *channel)
+static void gsi_channel_doorbell(struct gsi_channel *channel)
 {
 	struct gsi_ring *tre_ring = &channel->tre_ring;
 	u32 channel_id = gsi_channel_id(channel);
@@ -1600,7 +1600,7 @@ void gsi_channel_doorbell(struct gsi_channel *channel)
 }
 
 /* Consult hardware, move newly completed transactions to completed state */
-void gsi_channel_update(struct gsi_channel *channel)
+static void gsi_channel_update(struct gsi_channel *channel)
 {
 	u32 evt_ring_id = channel->evt_ring_id;
 	struct gsi *gsi = channel->gsi;
@@ -1840,7 +1840,7 @@ static void gsi_modem_channel_halt(struct gsi *gsi, u32 channel_id)
 }
 
 /* Enable or disable flow control for a modem GSI TX channel (IPA v4.2+) */
-void
+static void
 gsi_modem_channel_flow_control(struct gsi *gsi, u32 channel_id, bool enable)
 {
 	u32 retries = 0;
@@ -2064,7 +2064,7 @@ static int gsi_ring_setup(struct gsi *gsi)
 }
 
 /* Setup function for GSI.  GSI firmware must be loaded and initialized */
-int gsi_setup(struct gsi *gsi)
+static int gsi_setup(struct gsi *gsi)
 {
 	const struct reg *reg;
 	u32 val;
@@ -2103,7 +2103,7 @@ err_irq_teardown:
 }
 
 /* Inverse of gsi_setup() */
-void gsi_teardown(struct gsi *gsi)
+static void gsi_teardown(struct gsi *gsi)
 {
 	gsi_channel_teardown(gsi);
 	gsi_irq_teardown(gsi);
@@ -2213,6 +2213,34 @@ static bool gsi_channel_data_valid(struct gsi *gsi, bool command,
 	}
 
 	return true;
+}
+
+/* The maximum number of outstanding TREs on a channel.  This limits
+ * a channel's maximum number of transactions outstanding (worst case
+ * is one TRE per transaction).
+ *
+ * The absolute limit is the number of TREs in the channel's TRE ring,
+ * and in theory we should be able use all of them.  But in practice,
+ * doing that led to the hardware reporting exhaustion of event ring
+ * slots for writing completion information.  So the hardware limit
+ * would be (tre_count - 1).
+ *
+ * We reduce it a bit further though.  Transaction resource pools are
+ * sized to be a little larger than this maximum, to allow resource
+ * allocations to always be contiguous.  The number of entries in a
+ * TRE ring buffer is a power of 2, and the extra resources in a pool
+ * tends to nearly double the memory allocated for it.  Reducing the
+ * maximum number of outstanding TREs allows the number of entries in
+ * a pool to avoid crossing that power-of-2 boundary, and this can
+ * substantially reduce pool memory requirements.  The number we
+ * reduce it by matches the number added in gsi_trans_pool_init().
+ */
+u32 gsi_channel_tre_max(struct gsi *gsi, u32 channel_id)
+{
+	struct gsi_channel *channel = &gsi->channel[channel_id];
+
+	/* Hardware limit is channel->tre_count - 1 */
+	return channel->tre_count - (channel->trans_tre_max - 1);
 }
 
 /* Init function for a single channel */
@@ -2355,9 +2383,9 @@ static void gsi_channel_exit(struct gsi *gsi)
 }
 
 /* Init function for GSI.  GSI hardware does not need to be "ready" */
-int gsi_init(struct gsi *gsi, struct platform_device *pdev,
-	     enum ipa_version version, u32 count,
-	     const struct ipa_gsi_endpoint_data *data)
+static int gsi_init(struct gsi *gsi, struct platform_device *pdev,
+		    enum ipa_version version, u32 count,
+		    const struct ipa_gsi_endpoint_data *data)
 {
 	int ret;
 
@@ -2395,37 +2423,34 @@ err_reg_exit:
 }
 
 /* Inverse of gsi_init() */
-void gsi_exit(struct gsi *gsi)
+static void gsi_exit(struct gsi *gsi)
 {
 	mutex_destroy(&gsi->mutex);
 	gsi_channel_exit(gsi);
 	gsi_reg_exit(gsi);
 }
 
-/* The maximum number of outstanding TREs on a channel.  This limits
- * a channel's maximum number of transactions outstanding (worst case
- * is one TRE per transaction).
- *
- * The absolute limit is the number of TREs in the channel's TRE ring,
- * and in theory we should be able use all of them.  But in practice,
- * doing that led to the hardware reporting exhaustion of event ring
- * slots for writing completion information.  So the hardware limit
- * would be (tre_count - 1).
- *
- * We reduce it a bit further though.  Transaction resource pools are
- * sized to be a little larger than this maximum, to allow resource
- * allocations to always be contiguous.  The number of entries in a
- * TRE ring buffer is a power of 2, and the extra resources in a pool
- * tends to nearly double the memory allocated for it.  Reducing the
- * maximum number of outstanding TREs allows the number of entries in
- * a pool to avoid crossing that power-of-2 boundary, and this can
- * substantially reduce pool memory requirements.  The number we
- * reduce it by matches the number added in gsi_trans_pool_init().
- */
-u32 gsi_channel_tre_max(struct gsi *gsi, u32 channel_id)
-{
-	struct gsi_channel *channel = &gsi->channel[channel_id];
+struct gsi_ops gsi_ops = {
+	.init = gsi_init,
+	.exit = gsi_exit,
+	.setup = gsi_setup,
+	.teardown = gsi_teardown,
+	.suspend = gsi_suspend,
+	.resume = gsi_resume,
 
-	/* Hardware limit is channel->tre_count - 1 */
-	return channel->tre_count - (channel->trans_tre_max - 1);
-}
+	.channel_start = gsi_channel_start,
+	.channel_stop = gsi_channel_stop,
+	.channel_reset = gsi_channel_reset,
+	.channel_suspend = gsi_channel_suspend,
+	.channel_resume = gsi_channel_resume,
+	.modem_channel_flow_control = gsi_modem_channel_flow_control,
+
+	.channel_doorbell = gsi_channel_doorbell,
+	.channel_update = gsi_channel_update,
+	.ring_virt = gsi_ring_virt,
+	.trans_tx_committed = gsi_trans_tx_committed,
+	.trans_tx_queued = gsi_trans_tx_queued,
+
+	.trans_commit = gsi_trans_commit,
+	.trans_commit_wait = gsi_trans_commit_wait,
+};
