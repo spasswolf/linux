@@ -12,7 +12,7 @@
 #include <linux/dma-direction.h>
 
 #include "ipa_dma.h"
-#include "gsi_trans.h"
+#include "ipa_dma_trans.h"
 #include "ipa.h"
 #include "ipa_data.h"
 #include "ipa_endpoint.h"
@@ -436,7 +436,7 @@ static struct ipa_dma_trans *ipa_endpoint_trans_alloc(struct ipa_endpoint *endpo
 
 	direction = endpoint->toward_ipa ? DMA_TO_DEVICE : DMA_FROM_DEVICE;
 
-	return gsi_channel_trans_alloc(ipa_dma, channel_id, tre_count, direction);
+	return ipa_dma_channel_trans_alloc(ipa_dma, channel_id, tre_count, direction);
 }
 
 /* suspend_delay represents suspend for RX, delay for TX endpoints.
@@ -1252,7 +1252,7 @@ int ipa_endpoint_skb_tx(struct ipa_endpoint *endpoint, struct sk_buff *skb)
 	if (!trans)
 		return -EBUSY;
 
-	ret = gsi_trans_skb_add(trans, skb);
+	ret = ipa_dma_trans_skb_add(trans, skb);
 	if (ret)
 		goto err_trans_free;
 	trans->data = skb;	/* transaction owns skb now */
@@ -1262,7 +1262,7 @@ int ipa_endpoint_skb_tx(struct ipa_endpoint *endpoint, struct sk_buff *skb)
 	return 0;
 
 err_trans_free:
-	gsi_trans_free(trans);
+	ipa_dma_trans_free(trans);
 
 	return -ENOMEM;
 }
@@ -1313,7 +1313,7 @@ static int ipa_endpoint_replenish_one(struct ipa_endpoint *endpoint,
 	offset = NET_SKB_PAD;
 	len = buffer_size - offset;
 
-	ret = gsi_trans_page_add(trans, page, len, offset);
+	ret = ipa_dma_trans_page_add(trans, page, len, offset);
 	if (ret)
 		put_page(page);
 	else
@@ -1361,7 +1361,7 @@ static void ipa_endpoint_replenish(struct ipa_endpoint *endpoint)
 	return;
 
 try_again_later:
-	gsi_trans_free(trans);
+	ipa_dma_trans_free(trans);
 	clear_bit(IPA_REPLENISH_ACTIVE, endpoint->replenish_flags);
 
 	/* Whenever a receive buffer transaction completes we'll try to
@@ -1370,7 +1370,7 @@ try_again_later:
 	 * If the hardware has no receive buffers queued, schedule work to
 	 * try replenishing again.
 	 */
-	if (gsi_channel_trans_idle(&endpoint->ipa->ipa_dma, endpoint->channel_id))
+	if (ipa_dma_channel_trans_idle(&endpoint->ipa->ipa_dma, endpoint->channel_id))
 		schedule_delayed_work(&endpoint->replenish_work,
 				      msecs_to_jiffies(1));
 }
@@ -1380,7 +1380,7 @@ static void ipa_endpoint_replenish_enable(struct ipa_endpoint *endpoint)
 	set_bit(IPA_REPLENISH_ENABLED, endpoint->replenish_flags);
 
 	/* Start replenishing if hardware currently has no buffers */
-	if (gsi_channel_trans_idle(&endpoint->ipa->ipa_dma, endpoint->channel_id))
+	if (ipa_dma_channel_trans_idle(&endpoint->ipa->ipa_dma, endpoint->channel_id))
 		ipa_endpoint_replenish(endpoint);
 }
 
@@ -1705,7 +1705,7 @@ static int ipa_endpoint_reset_rx_aggr(struct ipa_endpoint *endpoint)
 	if (ret)
 		goto out_suspend_again;
 
-	ret = gsi_trans_read_byte(ipa_dma, endpoint->channel_id, addr);
+	ret = ipa_dma_trans_read_byte(ipa_dma, endpoint->channel_id, addr);
 	if (ret)
 		goto err_endpoint_stop;
 
@@ -1722,7 +1722,7 @@ static int ipa_endpoint_reset_rx_aggr(struct ipa_endpoint *endpoint)
 		dev_err(dev, "endpoint %u still active during reset\n",
 			endpoint->endpoint_id);
 
-	gsi_trans_read_byte_done(ipa_dma, endpoint->channel_id);
+	ipa_dma_trans_read_byte_done(ipa_dma, endpoint->channel_id);
 
 	ret = ipa_dma->ops->channel_stop(ipa_dma, endpoint->channel_id);
 	if (ret)

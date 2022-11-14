@@ -22,7 +22,7 @@
 #include "ipa_mem.h"
 #include "ipa_cmd.h"
 #include "ipa_dma.h"
-#include "gsi_trans.h"
+#include "ipa_dma_trans.h"
 
 /**
  * DOC: IPA Filter and Route Tables
