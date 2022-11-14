@@ -18,7 +18,7 @@
 #include "ipa_cmd.h"
 #include "ipa_mem.h"
 #include "ipa_table.h"
-#include "gsi_trans.h"
+#include "ipa_dma_trans.h"
 
 /* "Canary" value placed between memory regions to detect overflow */
 #define IPA_MEM_CANARY_VAL		cpu_to_le32(0xdeadbeef)
