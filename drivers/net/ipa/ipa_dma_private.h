@@ -110,7 +110,7 @@ void ipa_dma_channel_trans_exit(struct ipa_dma_channel *channel);
  * maximum number of outstanding TREs allows the number of entries in
  * a pool to avoid crossing that power-of-2 boundary, and this can
  * substantially reduce pool memory requirements.  The number we
- * reduce it by matches the number added in gsi_trans_pool_init().
+ * reduce it by matches the number added in ipa_dma_trans_pool_init().
  */
 static inline u32
 ipa_dma_channel_tre_max(struct ipa_dma *ipa_dma, u32 channel_id)
