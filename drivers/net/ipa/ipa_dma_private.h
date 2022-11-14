@@ -3,10 +3,10 @@
 /* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
  * Copyright (C) 2018-2022 Linaro Ltd.
  */
-#ifndef _GSI_PRIVATE_H_
-#define _GSI_PRIVATE_H_
+#ifndef _IPA_DMA_PRIVATE_H_
+#define _IPA_DMA_PRIVATE_H_
 
-/* === Only "gsi.c" and "gsi_trans.c" should include this file === */
+/* === Only "gsi.c" and "ipa_dma_trans.c" should include this file === */
 
 #include <linux/types.h>
 
@@ -17,45 +17,45 @@ struct ipa_dma_channel;
 #define GSI_RING_ELEMENT_SIZE	16	/* bytes; must be a power of 2 */
 
 /**
- * gsi_trans_move_complete() - Mark a GSI transaction completed
+ * ipa_dma_trans_move_complete() - Mark a DMA transaction completed
  * @trans:	Transaction whose state is to be updated
  */
-void gsi_trans_move_complete(struct ipa_dma_trans *trans);
+void ipa_dma_trans_move_complete(struct ipa_dma_trans *trans);
 
 /**
- * gsi_trans_move_polled() - Mark a transaction polled
+ * ipa_dma_trans_move_polled() - Mark a transaction polled
  * @trans:	Transaction whose state is to be updated
  */
-void gsi_trans_move_polled(struct ipa_dma_trans *trans);
+void ipa_dma_trans_move_polled(struct ipa_dma_trans *trans);
 
 /**
- * gsi_trans_complete() - Complete a GSI transaction
+ * ipa_dma_trans_complete() - Complete a DMA transaction
  * @trans:	Transaction to complete
  *
  * Marks a transaction complete (including freeing it).
  */
-void gsi_trans_complete(struct ipa_dma_trans *trans);
+void ipa_dma_trans_complete(struct ipa_dma_trans *trans);
 
 /**
- * gsi_channel_trans_mapped() - Return a transaction mapped to a TRE index
+ * ipa_dma_channel_trans_mapped() - Return a transaction mapped to a TRE index
  * @channel:	Channel associated with the transaction
  * @index:	Index of the TRE having a transaction
  *
- * Return:	The GSI transaction pointer associated with the TRE index
+ * Return:	The DMA transaction pointer associated with the TRE index
  */
-struct ipa_dma_trans *gsi_channel_trans_mapped(struct ipa_dma_channel *channel,
-					   u32 index);
+struct ipa_dma_trans *ipa_dma_channel_trans_mapped(struct ipa_dma_channel *channel,
+						   u32 index);
 
 /**
- * gsi_channel_trans_complete() - Return a channel's next completed transaction
+ * ipa_dma_channel_trans_complete() - Return a channel's next completed transaction
  * @channel:	Channel whose next transaction is to be returned
  *
  * Return:	The next completed transaction, or NULL if nothing new
  */
-struct ipa_dma_trans *gsi_channel_trans_complete(struct ipa_dma_channel *channel);
+struct ipa_dma_trans *ipa_dma_channel_trans_complete(struct ipa_dma_channel *channel);
 
 /**
- * gsi_channel_trans_cancel_pending() - Cancel pending transactions
+ * ipa_dma_channel_trans_cancel_pending() - Cancel pending transactions
  * @channel:	Channel whose pending transactions should be cancelled
  *
  * Cancel all pending transactions on a channel.  These are transactions
@@ -66,27 +66,27 @@ struct ipa_dma_trans *gsi_channel_trans_complete(struct ipa_dma_channel *channel
  * NOTE:  Transactions already complete at the time of this call are
  *	  unaffected.
  */
-void gsi_channel_trans_cancel_pending(struct ipa_dma_channel *channel);
+void ipa_dma_channel_trans_cancel_pending(struct ipa_dma_channel *channel);
 
 /**
- * gsi_channel_trans_init() - Initialize a channel's GSI transaction info
- * @ipa_dma:	IPA_DMA pointer
+ * ipa_dma_channel_trans_init() - Initialize a channel's DMA transaction info
+ * @ipa_dma:	IPA DMA pointer
  * @channel_id:	Channel number
  *
  * Return:	0 if successful, or -ENOMEM on allocation failure
  *
  * Creates and sets up information for managing transactions on a channel
  */
-int gsi_channel_trans_init(struct ipa_dma *ipa_dma, u32 channel_id);
+int ipa_dma_channel_trans_init(struct ipa_dma *ipa_dma, u32 channel_id);
 
 /**
- * gsi_channel_trans_exit() - Inverse of gsi_channel_trans_init()
+ * ipa_dma_channel_trans_exit() - Inverse of ipa_dma_channel_trans_init()
  * @channel:	Channel whose transaction information is to be cleaned up
  */
-void gsi_channel_trans_exit(struct ipa_dma_channel *channel);
+void ipa_dma_channel_trans_exit(struct ipa_dma_channel *channel);
 
 /* 
- * gsi_channel_tre_max() - Channel maximum number of in-flight TREs
+ * ipa_dma_channel_tre_max() - Channel maximum number of in-flight TREs
  * @ipa_dma:	IPA DMA pointer
  * @channel_id:	Channel whose limit is to be returned
  *
@@ -112,7 +112,8 @@ void gsi_channel_trans_exit(struct ipa_dma_channel *channel);
  * substantially reduce pool memory requirements.  The number we
  * reduce it by matches the number added in gsi_trans_pool_init().
  */
-static inline u32 gsi_channel_tre_max(struct ipa_dma *ipa_dma, u32 channel_id)
+static inline u32
+ipa_dma_channel_tre_max(struct ipa_dma *ipa_dma, u32 channel_id)
 {
 	struct ipa_dma_channel *channel = &ipa_dma->channel[channel_id];
 
@@ -120,4 +121,4 @@ static inline u32 gsi_channel_tre_max(struct ipa_dma *ipa_dma, u32 channel_id)
 	return channel->tre_count - (channel->trans_tre_max - 1);
 }
 
-#endif /* _GSI_PRIVATE_H_ */
+#endif /* _IPA_DMA_PRIVATE_H_ */
