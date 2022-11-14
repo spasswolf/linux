@@ -3,8 +3,8 @@
 /* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
  * Copyright (C) 2018-2023 Linaro Ltd.
  */
-#ifndef _GSI_H_
-#define _GSI_H_
+#ifndef _IPA_DMA_H_
+#define _IPA_DMA_H_
 
 #include <linux/types.h>
 #include <linux/spinlock.h>
@@ -17,7 +17,7 @@
 
 /* Maximum number of channels and event rings supported by the driver */
 #define GSI_CHANNEL_COUNT_MAX	23
-#define GSI_EVT_RING_COUNT_MAX	24
+#define IPA_DMA_EVT_RING_COUNT_MAX	24
 
 /* Maximum TLV FIFO size for a channel; 64 here is arbitrary (and high) */
 #define GSI_TLV_MAX		64
@@ -26,12 +26,12 @@ struct device;
 struct scatterlist;
 struct platform_device;
 
-struct gsi;
-struct gsi_trans;
-struct gsi_channel_data;
-struct ipa_gsi_endpoint_data;
+struct ipa_dma;
+struct ipa_dma_trans;
+struct ipa_dma_channel_data;
+struct ipa_dma_endpoint_data;
 
-struct gsi_ring {
+struct ipa_dma_ring {
 	void *virt;			/* ring array base address */
 	dma_addr_t addr;		/* primarily low 32 bits used */
 	u32 count;			/* number of elements in ring */
@@ -63,7 +63,7 @@ struct gsi_ring {
  * The result of a pool allocation of multiple elements is always
  * contiguous.
  */
-struct gsi_trans_pool {
+struct ipa_dma_trans_pool {
 	void *base;			/* base address of element pool */
 	u32 count;			/* # elements in the pool */
 	u32 free;			/* next free element in pool (modulo) */
@@ -72,7 +72,7 @@ struct gsi_trans_pool {
 	dma_addr_t addr;		/* DMA address if DMA pool (or 0) */
 };
 
-struct gsi_trans_info {
+struct ipa_dma_trans_info {
 	atomic_t tre_avail;		/* TREs available for allocation */
 
 	u16 free_id;			/* first free trans in array */
@@ -81,27 +81,27 @@ struct gsi_trans_info {
 	u16 pending_id;			/* first pending transaction */
 	u16 completed_id;		/* first completed transaction */
 	u16 polled_id;			/* first polled transaction */
-	struct gsi_trans *trans;	/* transaction array */
-	struct gsi_trans **map;		/* TRE -> transaction map */
+	struct ipa_dma_trans *trans;	/* transaction array */
+	struct ipa_dma_trans **map;		/* TRE -> transaction map */
 
-	struct gsi_trans_pool sg_pool;	/* scatterlist pool */
-	struct gsi_trans_pool cmd_pool;	/* command payload DMA pool */
+	struct ipa_dma_trans_pool sg_pool;	/* scatterlist pool */
+	struct ipa_dma_trans_pool cmd_pool;	/* command payload DMA pool */
 };
 
 /* Hardware values signifying the state of a channel */
-enum gsi_channel_state {
-	GSI_CHANNEL_STATE_NOT_ALLOCATED		= 0x0,
-	GSI_CHANNEL_STATE_ALLOCATED		= 0x1,
-	GSI_CHANNEL_STATE_STARTED		= 0x2,
-	GSI_CHANNEL_STATE_STOPPED		= 0x3,
-	GSI_CHANNEL_STATE_STOP_IN_PROC		= 0x4,
-	GSI_CHANNEL_STATE_FLOW_CONTROLLED	= 0x5,	/* IPA v4.2-v4.9 */
-	GSI_CHANNEL_STATE_ERROR			= 0xf,
+enum ipa_dma_channel_state {
+	IPA_DMA_CHANNEL_STATE_NOT_ALLOCATED	= 0x0,
+	IPA_DMA_CHANNEL_STATE_ALLOCATED		= 0x1,
+	IPA_DMA_CHANNEL_STATE_STARTED		= 0x2,
+	IPA_DMA_CHANNEL_STATE_STOPPED		= 0x3,
+	IPA_DMA_CHANNEL_STATE_STOP_IN_PROC	= 0x4,
+	IPA_DMA_CHANNEL_STATE_FLOW_CONTROLLED	= 0x5,	/* IPA v4.2-v4.9 */
+	IPA_DMA_CHANNEL_STATE_ERROR		= 0xf,
 };
 
 /* We only care about channels between IPA and AP */
-struct gsi_channel {
-	struct gsi *gsi;
+struct ipa_dma_channel {
+	struct ipa_dma *ipa_dma;
 	bool toward_ipa;
 	bool command;			/* AP command TX channel or not */
 
@@ -109,7 +109,7 @@ struct gsi_channel {
 	u16 tre_count;
 	u16 event_count;
 
-	struct gsi_ring tre_ring;
+	struct ipa_dma_ring tre_ring;
 	u32 evt_ring_id;
 
 	/* The following counts are used only for TX endpoints */
@@ -120,51 +120,51 @@ struct gsi_channel {
 	u64 compl_byte_count;		/* last reported completed byte count */
 	u64 compl_trans_count;		/* ...and completed trans count */
 
-	struct gsi_trans_info trans_info;
+	struct ipa_dma_trans_info trans_info;
 
 	struct napi_struct napi;
 };
 
 /* Hardware values signifying the state of an event ring */
-enum gsi_evt_ring_state {
-	GSI_EVT_RING_STATE_NOT_ALLOCATED	= 0x0,
-	GSI_EVT_RING_STATE_ALLOCATED		= 0x1,
-	GSI_EVT_RING_STATE_ERROR		= 0xf,
+enum ipa_dma_evt_ring_state {
+	IPA_DMA_EVT_RING_STATE_NOT_ALLOCATED	= 0x0,
+	IPA_DMA_EVT_RING_STATE_ALLOCATED	= 0x1,
+	IPA_DMA_EVT_RING_STATE_ERROR		= 0xf,
 };
 
-struct gsi_evt_ring {
-	struct gsi_channel *channel;
-	struct gsi_ring ring;
+struct ipa_dma_evt_ring {
+	struct ipa_dma_channel *channel;
+	struct ipa_dma_ring ring;
 };
 
-struct gsi_ops {
-	int (*init)(struct gsi *gsi, struct platform_device *pdev,
+struct ipa_dma_ops {
+	int (*init)(struct ipa_dma *ipa_dma, struct platform_device *pdev,
 		    enum ipa_version version, u32 count,
-		    const struct ipa_gsi_endpoint_data *data);
-	void (*exit)(struct gsi *gsi);
-	int (*setup)(struct gsi *gsi);
-	void (*teardown)(struct gsi *gsi);
-	void (*suspend)(struct gsi *gsi);
-	void (*resume)(struct gsi *gsi);
+		    const struct ipa_dma_endpoint_data *data);
+	void (*exit)(struct ipa_dma *ipa_dma);
+	int (*setup)(struct ipa_dma *ipa_dma);
+	void (*teardown)(struct ipa_dma *ipa_dma);
+	void (*suspend)(struct ipa_dma *ipa_dma);
+	void (*resume)(struct ipa_dma *ipa_dma);
 
-	int (*channel_start)(struct gsi *gsi, u32 channel_id);
-	int (*channel_stop)(struct gsi *gsi, u32 channel_id);
-	void (*channel_reset)(struct gsi *gsi, u32 channel_id, bool doorbell);
-	int (*channel_suspend)(struct gsi *gsi, u32 channel_id);
-	int (*channel_resume)(struct gsi *gsi, u32 channel_id);
-	void (*modem_channel_flow_control)(struct gsi *gsi, u32 channel_id, bool enable);
+	int (*channel_start)(struct ipa_dma *ipa_dma, u32 channel_id);
+	int (*channel_stop)(struct ipa_dma *ipa_dma, u32 channel_id);
+	void (*channel_reset)(struct ipa_dma *ipa_dma, u32 channel_id, bool doorbell);
+	int (*channel_suspend)(struct ipa_dma *ipa_dma, u32 channel_id);
+	int (*channel_resume)(struct ipa_dma *ipa_dma, u32 channel_id);
+	void (*modem_channel_flow_control)(struct ipa_dma *ipa_dma, u32 channel_id, bool enable);
 
-	void (*channel_doorbell)(struct gsi_channel *channel);
-	void (*channel_update)(struct gsi_channel *channel);
-	void *(*ring_virt)(struct gsi_ring *ring, u32 index);
-	void (*trans_tx_committed)(struct gsi_trans *trans);
-	void (*trans_tx_queued)(struct gsi_trans *trans);
+	void (*channel_doorbell)(struct ipa_dma_channel *channel);
+	void (*channel_update)(struct ipa_dma_channel *channel);
+	void *(*ring_virt)(struct ipa_dma_ring *ring, u32 index);
+	void (*trans_tx_committed)(struct ipa_dma_trans *trans);
+	void (*trans_tx_queued)(struct ipa_dma_trans *trans);
 
-	void (*trans_commit)(struct gsi_trans *trans, bool ring_db);
-	void (*trans_commit_wait)(struct gsi_trans *trans);
+	void (*trans_commit)(struct ipa_dma_trans *trans, bool ring_db);
+	void (*trans_commit_wait)(struct ipa_dma_trans *trans);
 };
 
-struct gsi {
+struct ipa_dma {
 	struct device *dev;		/* Same as IPA device */
 	enum ipa_version version;
 	void __iomem *virt;		/* I/O mapped registers */
@@ -180,12 +180,12 @@ struct gsi {
 	int result;			/* Negative errno (generic commands) */
 	struct completion completion;	/* Signals GSI command completion */
 	struct mutex mutex;		/* protects commands, programming */
-	struct gsi_channel channel[GSI_CHANNEL_COUNT_MAX];
-	struct gsi_evt_ring evt_ring[GSI_EVT_RING_COUNT_MAX];
+	struct ipa_dma_channel channel[GSI_CHANNEL_COUNT_MAX];
+	struct ipa_dma_evt_ring evt_ring[IPA_DMA_EVT_RING_COUNT_MAX];
 	struct net_device dummy_dev;	/* needed for NAPI */
-	struct gsi_ops *ops;
+	struct ipa_dma_ops *ops;
 };
 
-extern struct gsi_ops gsi_ops;
+extern struct ipa_dma_ops gsi_ops;
 
-#endif /* _GSI_H_ */
+#endif /* _IPA_DMA_H_ */

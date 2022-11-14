@@ -10,14 +10,14 @@
 #include <linux/workqueue.h>
 #include <linux/if_ether.h>
 
-#include "gsi.h"
+#include "ipa_dma.h"
 #include "ipa_reg.h"
 
 struct net_device;
 struct sk_buff;
 
 struct ipa;
-struct ipa_gsi_endpoint_data;
+struct ipa_dma_endpoint_data;
 
 /* Non-zero granularity of counter used to implement aggregation timeout */
 #define IPA_AGGR_GRANULARITY		500	/* microseconds */
@@ -196,12 +196,12 @@ void ipa_endpoint_default_route_set(struct ipa *ipa, u32 endpoint_id);
 void ipa_endpoint_default_route_clear(struct ipa *ipa);
 
 int ipa_endpoint_init(struct ipa *ipa, u32 count,
-		      const struct ipa_gsi_endpoint_data *data);
+		      const struct ipa_dma_endpoint_data *data);
 void ipa_endpoint_exit(struct ipa *ipa);
 
 void ipa_endpoint_trans_complete(struct ipa_endpoint *ipa,
-				 struct gsi_trans *trans);
+				 struct ipa_dma_trans *trans);
 void ipa_endpoint_trans_release(struct ipa_endpoint *ipa,
-				struct gsi_trans *trans);
+				struct ipa_dma_trans *trans);
 
 #endif /* _IPA_ENDPOINT_H_ */

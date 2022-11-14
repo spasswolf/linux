@@ -319,7 +319,7 @@ enum gsi_err_code {
 	GSI_OUT_OF_BUFFERS			= 0x2,
 	GSI_OUT_OF_RESOURCES			= 0x3,
 	GSI_UNSUPPORTED_INTER_EE_OP		= 0x4,
-	GSI_EVT_RING_EMPTY			= 0x5,
+	IPA_DMA_EVT_RING_EMPTY			= 0x5,
 	GSI_NON_ALLOCATED_EVT_ACCESS		= 0x6,
 	/* 7 is not assigned */
 	GSI_HWO_1				= 0x8,
