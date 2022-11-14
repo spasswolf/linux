@@ -116,7 +116,7 @@ int ipa_setup(struct ipa *ipa)
 	struct device *dev = &ipa->pdev->dev;
 	int ret;
 
-	ret = gsi_setup(&ipa->gsi);
+	ret = ipa->gsi.ops->setup(&ipa->gsi);
 	if (ret)
 		return ret;
 
@@ -172,7 +172,7 @@ err_endpoint_teardown:
 	ipa_endpoint_teardown(ipa);
 	ipa_power_teardown(ipa);
 err_gsi_teardown:
-	gsi_teardown(&ipa->gsi);
+	ipa->gsi.ops->teardown(&ipa->gsi);
 
 	return ret;
 }
@@ -197,7 +197,7 @@ static void ipa_teardown(struct ipa *ipa)
 	ipa_endpoint_disable_one(command_endpoint);
 	ipa_endpoint_teardown(ipa);
 	ipa_power_teardown(ipa);
-	gsi_teardown(&ipa->gsi);
+	ipa->gsi.ops->teardown(&ipa->gsi);
 }
 
 static void
@@ -857,8 +857,11 @@ static int ipa_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_reg_exit;
 
-	ret = gsi_init(&ipa->gsi, pdev, ipa->version, data->endpoint_count,
-		       data->endpoint_data);
+	/* GSI is the only supported DMA backend at the moment. */
+	ipa->gsi.ops = &gsi_ops;
+
+	ret = ipa->gsi.ops->init(&ipa->gsi, pdev, ipa->version,
+				  data->endpoint_count, data->endpoint_data);
 	if (ret)
 		goto err_mem_exit;
 
@@ -919,7 +922,7 @@ err_table_exit:
 err_endpoint_exit:
 	ipa_endpoint_exit(ipa);
 err_gsi_exit:
-	gsi_exit(&ipa->gsi);
+	ipa->gsi.ops->exit(&ipa->gsi);
 err_mem_exit:
 	ipa_mem_exit(ipa);
 err_reg_exit:
@@ -967,7 +970,7 @@ out_power_put:
 	ipa_smp2p_exit(ipa);
 	ipa_table_exit(ipa);
 	ipa_endpoint_exit(ipa);
-	gsi_exit(&ipa->gsi);
+	ipa->gsi.ops->exit(&ipa->gsi);
 	ipa_mem_exit(ipa);
 	ipa_reg_exit(ipa);
 	kfree(ipa);

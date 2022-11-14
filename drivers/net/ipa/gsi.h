@@ -137,6 +137,33 @@ struct gsi_evt_ring {
 	struct gsi_ring ring;
 };
 
+struct gsi_ops {
+	int (*init)(struct gsi *gsi, struct platform_device *pdev,
+		    enum ipa_version version, u32 count,
+		    const struct ipa_gsi_endpoint_data *data);
+	void (*exit)(struct gsi *gsi);
+	int (*setup)(struct gsi *gsi);
+	void (*teardown)(struct gsi *gsi);
+	void (*suspend)(struct gsi *gsi);
+	void (*resume)(struct gsi *gsi);
+
+	int (*channel_start)(struct gsi *gsi, u32 channel_id);
+	int (*channel_stop)(struct gsi *gsi, u32 channel_id);
+	void (*channel_reset)(struct gsi *gsi, u32 channel_id, bool doorbell);
+	int (*channel_suspend)(struct gsi *gsi, u32 channel_id);
+	int (*channel_resume)(struct gsi *gsi, u32 channel_id);
+	void (*modem_channel_flow_control)(struct gsi *gsi, u32 channel_id, bool enable);
+
+	void (*channel_doorbell)(struct gsi_channel *channel);
+	void (*channel_update)(struct gsi_channel *channel);
+	void *(*ring_virt)(struct gsi_ring *ring, u32 index);
+	void (*trans_tx_committed)(struct gsi_trans *trans);
+	void (*trans_tx_queued)(struct gsi_trans *trans);
+
+	void (*trans_commit)(struct gsi_trans *trans, bool ring_db);
+	void (*trans_commit_wait)(struct gsi_trans *trans);
+};
+
 struct gsi {
 	struct device *dev;		/* Same as IPA device */
 	enum ipa_version version;
@@ -156,126 +183,9 @@ struct gsi {
 	struct gsi_channel channel[GSI_CHANNEL_COUNT_MAX];
 	struct gsi_evt_ring evt_ring[GSI_EVT_RING_COUNT_MAX];
 	struct net_device dummy_dev;	/* needed for NAPI */
+	struct gsi_ops *ops;
 };
 
-/**
- * gsi_setup() - Set up the GSI subsystem
- * @gsi:	Address of GSI structure embedded in an IPA structure
- *
- * Return:	0 if successful, or a negative error code
- *
- * Performs initialization that must wait until the GSI hardware is
- * ready (including firmware loaded).
- */
-int gsi_setup(struct gsi *gsi);
-
-/**
- * gsi_teardown() - Tear down GSI subsystem
- * @gsi:	GSI address previously passed to a successful gsi_setup() call
- */
-void gsi_teardown(struct gsi *gsi);
-
-/**
- * gsi_channel_tre_max() - Channel maximum number of in-flight TREs
- * @gsi:	GSI pointer
- * @channel_id:	Channel whose limit is to be returned
- *
- * Return:	 The maximum number of TREs outstanding on the channel
- */
-u32 gsi_channel_tre_max(struct gsi *gsi, u32 channel_id);
-
-/**
- * gsi_channel_start() - Start an allocated GSI channel
- * @gsi:	GSI pointer
- * @channel_id:	Channel to start
- *
- * Return:	0 if successful, or a negative error code
- */
-int gsi_channel_start(struct gsi *gsi, u32 channel_id);
-
-/**
- * gsi_channel_stop() - Stop a started GSI channel
- * @gsi:	GSI pointer returned by gsi_setup()
- * @channel_id:	Channel to stop
- *
- * Return:	0 if successful, or a negative error code
- */
-int gsi_channel_stop(struct gsi *gsi, u32 channel_id);
-
-/**
- * gsi_modem_channel_flow_control() - Set channel flow control state (IPA v4.2+)
- * @gsi:	GSI pointer returned by gsi_setup()
- * @channel_id:	Modem TX channel to control
- * @enable:	Whether to enable flow control (i.e., prevent flow)
- */
-void gsi_modem_channel_flow_control(struct gsi *gsi, u32 channel_id,
-				    bool enable);
-
-/**
- * gsi_channel_reset() - Reset an allocated GSI channel
- * @gsi:	GSI pointer
- * @channel_id:	Channel to be reset
- * @doorbell:	Whether to (possibly) enable the doorbell engine
- *
- * Reset a channel and reconfigure it.  The @doorbell flag indicates
- * that the doorbell engine should be enabled if needed.
- *
- * GSI hardware relinquishes ownership of all pending receive buffer
- * transactions and they will complete with their cancelled flag set.
- */
-void gsi_channel_reset(struct gsi *gsi, u32 channel_id, bool doorbell);
-
-/**
- * gsi_suspend() - Prepare the GSI subsystem for suspend
- * @gsi:	GSI pointer
- */
-void gsi_suspend(struct gsi *gsi);
-
-/**
- * gsi_resume() - Resume the GSI subsystem following suspend
- * @gsi:	GSI pointer
- */
-void gsi_resume(struct gsi *gsi);
-
-/**
- * gsi_channel_suspend() - Suspend a GSI channel
- * @gsi:	GSI pointer
- * @channel_id:	Channel to suspend
- *
- * For IPA v4.0+, suspend is implemented by stopping the channel.
- */
-int gsi_channel_suspend(struct gsi *gsi, u32 channel_id);
-
-/**
- * gsi_channel_resume() - Resume a suspended GSI channel
- * @gsi:	GSI pointer
- * @channel_id:	Channel to resume
- *
- * For IPA v4.0+, the stopped channel is started again.
- */
-int gsi_channel_resume(struct gsi *gsi, u32 channel_id);
-
-/**
- * gsi_init() - Initialize the GSI subsystem
- * @gsi:	Address of GSI structure embedded in an IPA structure
- * @pdev:	IPA platform device
- * @version:	IPA hardware version (implies GSI version)
- * @count:	Number of entries in the configuration data array
- * @data:	Endpoint and channel configuration data
- *
- * Return:	0 if successful, or a negative error code
- *
- * Early stage initialization of the GSI subsystem, performing tasks
- * that can be done before the GSI hardware is ready to use.
- */
-int gsi_init(struct gsi *gsi, struct platform_device *pdev,
-	     enum ipa_version version, u32 count,
-	     const struct ipa_gsi_endpoint_data *data);
-
-/**
- * gsi_exit() - Exit the GSI subsystem
- * @gsi:	GSI address previously passed to a successful gsi_init() call
- */
-void gsi_exit(struct gsi *gsi);
+extern struct gsi_ops gsi_ops;
 
 #endif /* _GSI_H_ */
