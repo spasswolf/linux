@@ -54,6 +54,9 @@ enum ipa_version {
 static inline bool ipa_version_supported(enum ipa_version version)
 {
 	switch (version) {
+	case IPA_VERSION_2_0:
+	case IPA_VERSION_2_5:
+	case IPA_VERSION_2_6L:
 	case IPA_VERSION_3_1:
 	case IPA_VERSION_3_5_1:
 	case IPA_VERSION_4_2:
