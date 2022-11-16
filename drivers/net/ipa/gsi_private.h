@@ -37,15 +37,6 @@ void gsi_trans_move_polled(struct gsi_trans *trans);
 void gsi_trans_complete(struct gsi_trans *trans);
 
 /**
- * gsi_channel_tre_max() - Channel maximum number of in-flight TREs
- * @gsi:	GSI pointer
- * @channel_id:	Channel whose limit is to be returned
- *
- * Return:	 The maximum number of TREs outstanding on the channel
- */
-u32 gsi_channel_tre_max(struct gsi *gsi, u32 channel_id);
-
-/**
  * gsi_channel_trans_mapped() - Return a transaction mapped to a TRE index
  * @channel:	Channel associated with the transaction
  * @index:	Index of the TRE having a transaction
@@ -93,5 +84,40 @@ int gsi_channel_trans_init(struct gsi *gsi, u32 channel_id);
  * @channel:	Channel whose transaction information is to be cleaned up
  */
 void gsi_channel_trans_exit(struct gsi_channel *channel);
+
+/* 
+ * gsi_channel_tre_max() - Channel maximum number of in-flight TREs
+ * @gsi:	GSI pointer
+ * @channel_id:	Channel whose limit is to be returned
+ *
+ * Return:	The maximum number of TREs outstanding on the channel
+ *
+ * Calculate the maximum number of outstanding TREs on a channel.
+ * This limits a channel's maximum number of transactions outstanding
+ * (worst case is one TRE per transaction).
+ *
+ * The absolute limit is the number of TREs in the channel's TRE ring,
+ * and in theory we should be able use all of them.  But in practice,
+ * doing that led to the hardware reporting exhaustion of event ring
+ * slots for writing completion information.  So the hardware limit
+ * would be (tre_count - 1).
+ *
+ * We reduce it a bit further though.  Transaction resource pools are
+ * sized to be a little larger than this maximum, to allow resource
+ * allocations to always be contiguous.  The number of entries in a
+ * TRE ring buffer is a power of 2, and the extra resources in a pool
+ * tends to nearly double the memory allocated for it.  Reducing the
+ * maximum number of outstanding TREs allows the number of entries in
+ * a pool to avoid crossing that power-of-2 boundary, and this can
+ * substantially reduce pool memory requirements.  The number we
+ * reduce it by matches the number added in gsi_trans_pool_init().
+ */
+static inline u32 gsi_channel_tre_max(struct gsi *gsi, u32 channel_id)
+{
+	struct gsi_channel *channel = &gsi->channel[channel_id];
+
+	/* Hardware limit is channel->tre_count - 1 */
+	return channel->tre_count - (channel->trans_tre_max - 1);
+}
 
 #endif /* _GSI_PRIVATE_H_ */
