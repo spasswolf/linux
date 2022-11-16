@@ -2190,8 +2190,8 @@ static bool gsi_channel_data_valid(struct gsi *gsi, bool command,
 
 	/* We have to allow at least one maximally-sized transaction to
 	 * be outstanding (which would use tlv_count TREs).  Given how
-	 * gsi_channel_tre_max() is computed, tre_count has to be almost
-	 * twice the TLV FIFO size to satisfy this requirement.
+	 * ipa_dma_channel_tre_max() is computed, tre_count has to be
+	 * almost twice the TLV FIFO size to satisfy this requirement.
 	 */
 	if (channel_data->tre_count < 2 * channel_data->tlv_count - 1) {
 		dev_err(dev, "channel %u TLV count %u exceeds TRE count %u\n",
@@ -2213,34 +2213,6 @@ static bool gsi_channel_data_valid(struct gsi *gsi, bool command,
 	}
 
 	return true;
-}
-
-/* The maximum number of outstanding TREs on a channel.  This limits
- * a channel's maximum number of transactions outstanding (worst case
- * is one TRE per transaction).
- *
- * The absolute limit is the number of TREs in the channel's TRE ring,
- * and in theory we should be able use all of them.  But in practice,
- * doing that led to the hardware reporting exhaustion of event ring
- * slots for writing completion information.  So the hardware limit
- * would be (tre_count - 1).
- *
- * We reduce it a bit further though.  Transaction resource pools are
- * sized to be a little larger than this maximum, to allow resource
- * allocations to always be contiguous.  The number of entries in a
- * TRE ring buffer is a power of 2, and the extra resources in a pool
- * tends to nearly double the memory allocated for it.  Reducing the
- * maximum number of outstanding TREs allows the number of entries in
- * a pool to avoid crossing that power-of-2 boundary, and this can
- * substantially reduce pool memory requirements.  The number we
- * reduce it by matches the number added in gsi_trans_pool_init().
- */
-u32 gsi_channel_tre_max(struct gsi *gsi, u32 channel_id)
-{
-	struct gsi_channel *channel = &gsi->channel[channel_id];
-
-	/* Hardware limit is channel->tre_count - 1 */
-	return channel->tre_count - (channel->trans_tre_max - 1);
 }
 
 /* Init function for a single channel */
