@@ -138,11 +138,16 @@ static int psci_cpuidle_domain_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
 	struct device_node *node;
-	bool use_osi = psci_has_osi_support();
+	bool force_psci_domains;
+	bool use_osi;
 	int ret = 0, pd_count = 0;
 
 	if (!np)
 		return -ENODEV;
+
+	force_psci_domains = of_property_read_bool(np, "force-psci-domains");
+
+	use_osi = force_psci_domains ? true : psci_has_osi_support();
 
 	/*
 	 * Parse child nodes for the "#power-domain-cells" property and
