@@ -226,6 +226,7 @@ static struct ipa_power_data ipa_power_data = {
 /* Configuration data for IPA v2.0 */
 const struct ipa_data ipa_data_v2_0 = {
 	.version	= IPA_VERSION_2_0,
+	.modem_route_count      = 8,
 	.endpoint_count	= ARRAY_SIZE(ipa_endpoint_data),
 	.endpoint_data	= ipa_endpoint_data,
 	.mem_data	= &ipa_mem_data,
