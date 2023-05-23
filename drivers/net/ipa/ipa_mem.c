@@ -483,7 +483,8 @@ int ipa_mem_zero_modem(struct ipa *ipa)
 	}
 
 	ipa_mem_zero_region_add(trans, IPA_MEM_MODEM_HEADER);
-	ipa_mem_zero_region_add(trans, IPA_MEM_MODEM_PROC_CTX);
+	if (ipa->version == IPA_VERSION_2_5 || ipa->version >= IPA_VERSION_3_0)
+		ipa_mem_zero_region_add(trans, IPA_MEM_MODEM_PROC_CTX);
 	ipa_mem_zero_region_add(trans, IPA_MEM_MODEM);
 
 	trans->ipa_dma->ops->trans_commit_wait(trans);
