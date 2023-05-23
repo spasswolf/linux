@@ -263,7 +263,7 @@ static void gsi_irq_ch_ctrl_enable(struct ipa_dma *ipa_dma, u32 channel_id)
 	iowrite32(~0, ipa_dma->virt + reg_offset(reg));
 
 	reg = gsi_reg(ipa_dma, CNTXT_SRC_CH_IRQ_MSK);
-	iowrite32(val, pa_dmai->virt + reg_offset(reg));
+	iowrite32(val, ipa_dma->virt + reg_offset(reg));
 
 	gsi_irq_type_enable(ipa_dma, GSI_CH_CTRL);
 }

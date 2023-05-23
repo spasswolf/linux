@@ -260,7 +260,6 @@ void ipa_uc_power(struct ipa *ipa)
 /* Send a command to the microcontroller */
 static void send_uc_command(struct ipa *ipa, u32 command, u32 command_param)
 {
-	struct ipa_uc_mem_area *shared = ipa_uc_shared(ipa);
 	const struct reg *reg;
 	u32 val;
 

@@ -63,6 +63,7 @@ enum ipa_reg_id {
 	QSB_MAX_READS,					/* IPA v3.0+ */
 	FILT_ROUT_HASH_EN,				/* IPA v3.0+ */
 	FILT_ROUT_HASH_FLUSH,				/* IPA v3.0+ */
+	FILT_ROUT_CACHE_FLUSH,				/* IPA v5.0+ */
 	STATE_AGGR_ACTIVE,				/* IPA v3.0+ */
 	IPA_BCR,					/* IPA v2.5+, Not IPA v4.5+ */
 	ENABLED_PIPES,					/* IPA v2.6l+ */

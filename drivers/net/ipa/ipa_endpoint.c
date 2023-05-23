@@ -1499,7 +1499,7 @@ ipa_endpoint_status_skip(struct ipa_endpoint *endpoint, const void *data)
 	u32 endpoint_id;
 
 	opcode = ipa_status_extract(ipa, data, STATUS_OPCODE);
-	if (!ipa_status_format_packet(opcode))
+	if (!ipa_status_format_packet(ipa, opcode))
 		return true;
 
 	endpoint_id = ipa_status_extract(ipa, data, STATUS_DST_ENDPOINT);
@@ -2058,10 +2058,10 @@ int ipa_endpoint_config(struct ipa *ipa)
 		// FIXME Not used anywhere?
 		if (ipa->version == IPA_VERSION_2_6L) {
 			reg = ipa_reg(ipa, ENABLED_PIPES);
-			val = ioread32(ipa->reg_virt + ipa_reg_offset(reg));
+			val = ioread32(ipa->reg_virt + reg_offset(reg));
 		}
 		/* IPA v2.6L supports 20 pipes */
-		ipa->available = ipa->filter_map;
+		ipa->available = ipa->filtered;
 		return 0;
 	} else {
 		reg = ipa_reg(ipa, FLAVOR_0);

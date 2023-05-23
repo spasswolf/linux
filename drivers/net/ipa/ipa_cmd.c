@@ -362,18 +362,6 @@ static bool ipa_cmd_register_write_valid(struct ipa *ipa)
 	return true;
 }
 
-bool ipa_cmd_data_valid(struct ipa *ipa)
-{
-	if (!ipa_cmd_header_valid(ipa))
-		return false;
-
-	if (!ipa_cmd_register_write_valid(ipa))
-		return false;
-
-	return true;
-}
-
-
 int ipa_cmd_pool_init(struct ipa_dma_channel *channel, u32 tre_max)
 {
 	struct ipa_dma_trans_info *trans_info = &channel->trans_info;

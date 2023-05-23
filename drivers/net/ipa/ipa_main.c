@@ -274,17 +274,17 @@ static void ipa_hardware_config_comp(struct ipa *ipa)
 	u32 offset;
 	u32 val;
 
-	/* Nothing to configure on IPA v3.* */
-	if (ipa->version < IPA_VERSION_4_0)
-		return;
-
 	if (ipa->version <= IPA_VERSION_2_6L) {
 		reg = ipa_reg(ipa, COMP_SW_RESET);
-		offset = ipa_reg_offset(reg);
+		offset = reg_offset(reg);
 		
 		iowrite32(1, ipa->reg_virt + offset);
 		iowrite32(0, ipa->reg_virt + offset);
 	}
+
+	/* Nothing to configure on IPA v3.* */
+	if (ipa->version < IPA_VERSION_4_0)
+		return;
 
 	reg = ipa_reg(ipa, COMP_CFG);
 	offset = reg_offset(reg);

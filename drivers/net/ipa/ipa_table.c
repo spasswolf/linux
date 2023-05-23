@@ -741,7 +741,7 @@ int ipa_table_init(struct ipa *ipa)
 {
 	enum ipa_version version = ipa->version;
 	struct device *dev = &ipa->pdev->dev;
-	u64 filter_map;
+	u64 filtered;
 	const size_t entry_size = ipa->version > IPA_VERSION_2_6L ?
 				sizeof(__le64) : sizeof(__le32);
 	dma_addr_t addr;
@@ -778,13 +778,13 @@ int ipa_table_init(struct ipa *ipa)
 	 * that option, so there's no shifting required.
 	 */
 	if (version <= IPA_VERSION_2_6L)
-		filter_map = (ipa->filtered << 1 ) | 1;
+		filtered = (ipa->filtered << 1 ) | 1;
 	else if (ipa->version < IPA_VERSION_5_0)
-		filter_map = ipa->filtered << 1;
+		filtered = ipa->filtered << 1;
 	else
-		filter_map = ipa->filtered;
+		filtered = ipa->filtered;
 
-	virt = ipa_table_write(version, virt, filter_map);
+	virt = ipa_table_write(version, virt, filtered);
 
 	/* All the rest contain the DMA address of the zero rule */
 	while (count--)

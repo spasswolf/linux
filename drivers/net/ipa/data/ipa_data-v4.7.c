@@ -4,7 +4,7 @@
 
 #include <linux/log2.h>
 
-#include "../gsi.h"
+#include "../ipa_dma.h"
 #include "../ipa_data.h"
 #include "../ipa_endpoint.h"
 #include "../ipa_mem.h"
@@ -46,7 +46,7 @@ static const struct ipa_qsb_data ipa_qsb_data[] = {
 };
 
 /* Endpoint configuration data for an SoC having IPA v4.7 */
-static const struct ipa_gsi_endpoint_data ipa_gsi_endpoint_data[] = {
+static const struct ipa_dma_endpoint_data ipa_gsi_endpoint_data[] = {
 	[IPA_ENDPOINT_AP_COMMAND_TX] = {
 		.ee_id		= DMA_EE_AP,
 		.channel_id	= 5,
