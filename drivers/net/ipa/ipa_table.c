@@ -604,6 +604,8 @@ void ipa_table_config(struct ipa *ipa)
 bool ipa_table_mem_valid(struct ipa *ipa, bool filter)
 {
 	bool hash_support = ipa_table_hash_support(ipa);
+	const size_t entry_size = ipa->version > IPA_VERSION_2_6L 
+				? sizeof(__le64) : sizeof (__le32);
 	const struct ipa_mem *mem_hashed;
 	const struct ipa_mem *mem_ipv4;
 	const struct ipa_mem *mem_ipv6;
@@ -625,7 +627,7 @@ bool ipa_table_mem_valid(struct ipa *ipa, bool filter)
 		return false;
 
 	/* Compute and record the number of entries for each table type */
-	count = mem_ipv4->size / sizeof(__le64);
+	count = mem_ipv4->size / entry_size;
 	if (count < 2)
 		return false;
 	if (filter)
