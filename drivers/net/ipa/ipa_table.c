@@ -124,7 +124,8 @@
  * 32-bit all-zero rule list terminator.  The "zero rule" is simply an
  * all-zero rule followed by the list terminator.
  */
-#define IPA_ZERO_RULE_SIZE		(2 * sizeof(__le32))
+#define IPA_ZERO_RULE_SIZE(version) \
+	 (version >= IPA_VERSION_3_0 ? 2 * sizeof(__le32) : sizeof(__le32))
 
 /* Check things that can be validated at build time. */
 static void ipa_table_validate_build(void)
@@ -137,12 +138,6 @@ static void ipa_table_validate_build(void)
 	 * initialize tables.
 	 */
 	BUILD_BUG_ON(sizeof(dma_addr_t) > sizeof(__le64));
-
-	/* A "zero rule" is used to represent no filtering or no routing.
-	 * It is a 64-bit block of zeroed memory.  Code in ipa_table_init()
-	 * assumes that it can be written using a pointer to __le64.
-	 */
-	BUILD_BUG_ON(IPA_ZERO_RULE_SIZE != sizeof(__le64));
 }
 
 static const struct ipa_mem *
@@ -762,7 +757,7 @@ int ipa_table_init(struct ipa *ipa)
 	 * by dma_alloc_coherent() is guaranteed to be a power-of-2 number
 	 * of pages, which satisfies the rule alignment requirement.
 	 */
-	size = IPA_ZERO_RULE_SIZE + (1 + count) * entry_size;
+	size = IPA_ZERO_RULE_SIZE(ipa->version) + (1 + count) * entry_size;
 	virt = dma_alloc_coherent(dev, size, &addr, GFP_KERNEL);
 	if (!virt)
 		return -ENOMEM;
@@ -804,7 +799,7 @@ void ipa_table_exit(struct ipa *ipa)
 
 	size_t size;
 
-	size = IPA_ZERO_RULE_SIZE + (1 + count) * entry_size;
+	size = IPA_ZERO_RULE_SIZE(ipa->version) + (1 + count) * entry_size;
 
 	dma_free_coherent(dev, size, ipa->table_virt, ipa->table_addr);
 	ipa->table_addr = 0;
