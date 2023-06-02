@@ -58,6 +58,11 @@ static bool ipa_interrupt_check_fixup(enum ipa_irq_id *irq_id, enum ipa_version 
 
 	if (*irq_id >= IPA_IRQ_DRBIP_PKT_EXCEED_MAX_SIZE_EN)
 		return version >= IPA_VERSION_4_9;
+	else if (*irq_id > IPA_IRQ_BAM_GSI_IDLE)
+		return version >= IPA_VERSION_3_0;
+	else if (version <= IPA_VERSION_2_6L &&
+			*irq_id >= IPA_IRQ_PROC_UC_ACK_Q_NOT_EMPTY)
+		*irq_id += 2;
 
 	return true;
 }
@@ -72,6 +77,12 @@ static void ipa_interrupt_process(struct ipa_interrupt *interrupt, u32 irq_id)
 
 	reg = ipa_reg(ipa, IPA_IRQ_CLR);
 	offset = reg_offset(reg);
+
+	/* For IPA v2 we have to substract 2 as the ipa_irq_id enum
+	 * is defined for IPA v3 */
+        if (ipa->version <= IPA_VERSION_2_6L &&
+                       irq_id >= IPA_IRQ_PROC_UC_ACK_Q_NOT_EMPTY + 2)
+		irq_id -= 2;
 
 	switch (irq_id) {
 	case IPA_IRQ_UC_0:
