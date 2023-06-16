@@ -36,7 +36,7 @@ struct ipa;
  * by register ID.  Each entry in the array specifies the base offset and
  * (for parameterized registers) a non-zero stride value.  Not all versions
  * of IPA define all registers.  The offset for a register is returned by
- * reg_offset() when the register's ipa_reg structure is supplied;
+  reg_offset() when the register's ipa_reg structure is supplied;
  * zero is returned for an undefined register (this should never happen).
  *
  * Some registers encode multiple fields within them.  Each field in
@@ -55,33 +55,35 @@ struct ipa;
 /* enum ipa_reg_id - IPA register IDs */
 enum ipa_reg_id {
 	COMP_CFG,
+	COMP_SW_RESET,
 	CLKON_CFG,
 	ROUTE,
 	SHARED_MEM_SIZE,
-	QSB_MAX_WRITES,
-	QSB_MAX_READS,
-	FILT_ROUT_HASH_EN,				/* IPA v4.2 */
-	FILT_ROUT_HASH_FLUSH,			/* Not IPA v4.2 nor IPA v5.0+ */
+	QSB_MAX_WRITES,					/* IPA v3.0+ */
+	QSB_MAX_READS,					/* IPA v3.0+ */
+	FILT_ROUT_HASH_EN,				/* IPA v3.0+ */
+	FILT_ROUT_HASH_FLUSH,				/* IPA v3.0+ */
 	FILT_ROUT_CACHE_FLUSH,				/* IPA v5.0+ */
-	STATE_AGGR_ACTIVE,
-	IPA_BCR,					/* Not IPA v4.5+ */
-	LOCAL_PKT_PROC_CNTXT,
+	STATE_AGGR_ACTIVE,				/* IPA v3.0+ */
+	IPA_BCR,					/* IPA v2.5+, Not IPA v4.5+ */
+	ENABLED_PIPES,					/* IPA v2.6l+ */
+	LOCAL_PKT_PROC_CNTXT,				/* IPA v2.5, IPA v3.0+ */
 	AGGR_FORCE_CLOSE,
-	COUNTER_CFG,					/* Not IPA v4.5+ */
+	COUNTER_CFG,					/* IPA v2.5+, Not IPA v4.5+ */
 	IPA_TX_CFG,					/* IPA v3.5+ */
 	FLAVOR_0,					/* IPA v3.5+ */
 	IDLE_INDICATION_CFG,				/* IPA v3.5+ */
 	QTIME_TIMESTAMP_CFG,				/* IPA v4.5+ */
 	TIMERS_XO_CLK_DIV_CFG,				/* IPA v4.5+ */
 	TIMERS_PULSE_GRAN_CFG,				/* IPA v4.5+ */
-	SRC_RSRC_GRP_01_RSRC_TYPE,
-	SRC_RSRC_GRP_23_RSRC_TYPE,
-	SRC_RSRC_GRP_45_RSRC_TYPE,	/* Not IPA v3.5+; IPA v4.5, IPA v5.0 */
-	SRC_RSRC_GRP_67_RSRC_TYPE,		/* Not IPA v3.5+; IPA v5.0 */
-	DST_RSRC_GRP_01_RSRC_TYPE,
-	DST_RSRC_GRP_23_RSRC_TYPE,
-	DST_RSRC_GRP_45_RSRC_TYPE,	/* Not IPA v3.5+; IPA v4.5, IPA v5.0 */
-	DST_RSRC_GRP_67_RSRC_TYPE,		/* Not IPA v3.5+; IPA v5.0 */
+	SRC_RSRC_GRP_01_RSRC_TYPE,			/* IPA v3.0+ */
+	SRC_RSRC_GRP_23_RSRC_TYPE,			/* IPA v3.0+ */
+	SRC_RSRC_GRP_45_RSRC_TYPE,			/* IPA v3.0+, Not IPA v3.5+, IPA v4.5, IPA v5.0 */
+	SRC_RSRC_GRP_67_RSRC_TYPE,			/* IPA v3.0+, Not IPA v3.5+, IPA v5.0 */
+	DST_RSRC_GRP_01_RSRC_TYPE,			/* IPA v3.0+ */
+	DST_RSRC_GRP_23_RSRC_TYPE,			/* IPA v3.0+ */
+	DST_RSRC_GRP_45_RSRC_TYPE,			/* IPA v3.0+, Not IPA v3.5+, IPA v4.5, IPA v5.0 */
+	DST_RSRC_GRP_67_RSRC_TYPE,			/* IPA v3.0+, Not IPA v3.5+, IPA v5.0 */
 	ENDP_INIT_CTRL,		/* Not IPA v4.2+ for TX, not IPA v4.0+ for RX */
 	ENDP_INIT_CFG,
 	ENDP_INIT_NAT,			/* TX only */
@@ -96,14 +98,14 @@ enum ipa_reg_id {
 	ENDP_INIT_RSRC_GRP,
 	ENDP_INIT_SEQ,			/* TX only */
 	ENDP_STATUS,
-	ENDP_FILTER_ROUTER_HSH_CFG,			/* Not IPA v4.2 */
+	ENDP_FILTER_ROUTER_HSH_CFG,	/* IPA v3.0+, Not IPA v4.2 */
 	ENDP_FILTER_CACHE_CFG,				/* IPA v5.0+ */
 	ENDP_ROUTER_CACHE_CFG,				/* IPA v5.0+ */
 	/* The IRQ registers that follow are only used for DMA_EE_AP */
 	IPA_IRQ_STTS,
 	IPA_IRQ_EN,
 	IPA_IRQ_CLR,
-	IPA_IRQ_UC,
+	IPA_IRQ_UC,					/* IPA v3.0+ */
 	IRQ_SUSPEND_INFO,
 	IRQ_SUSPEND_EN,					/* IPA v3.1+ */
 	IRQ_SUSPEND_CLR,				/* IPA v3.1+ */
@@ -114,10 +116,10 @@ enum ipa_reg_id {
 enum ipa_reg_comp_cfg_field_id {
 	COMP_CFG_ENABLE,				/* Not IPA v4.0+ */
 	RAM_ARB_PRI_CLIENT_SAMP_FIX_DIS,		/* IPA v4.7+ */
-	GSI_SNOC_BYPASS_DIS,
-	GEN_QMB_0_SNOC_BYPASS_DIS,
-	GEN_QMB_1_SNOC_BYPASS_DIS,
-	IPA_DCMP_FAST_CLK_EN,				/* Not IPA v4.5+ */
+	GSI_SNOC_BYPASS_DIS,				/* IPA v3.0+ */
+	GEN_QMB_0_SNOC_BYPASS_DIS,			/* IPA v3.0+ */
+	GEN_QMB_1_SNOC_BYPASS_DIS,			/* IPA v3.0+ */
+	IPA_DCMP_FAST_CLK_EN,				/* IPA v3.0+, Not IPA v4.5+ */
 	IPA_QMB_SELECT_CONS_EN,				/* IPA v4.0+ */
 	IPA_QMB_SELECT_PROD_EN,				/* IPA v4.0+ */
 	GSI_MULTI_INORDER_RD_DIS,			/* IPA v4.0+ */
@@ -629,6 +631,9 @@ enum ipa_reg_ipa_irq_uc_field_id {
 	UC_INTR,
 };
 
+extern const struct regs ipa_regs_v2_0;
+extern const struct regs ipa_regs_v2_5;
+extern const struct regs ipa_regs_v2_6l;
 extern const struct regs ipa_regs_v3_1;
 extern const struct regs ipa_regs_v3_5_1;
 extern const struct regs ipa_regs_v4_2;
