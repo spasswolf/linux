@@ -18,18 +18,18 @@ struct scatterlist;
 struct device;
 struct sk_buff;
 
-struct gsi;
-struct gsi_trans;
-struct gsi_trans_pool;
+struct ipa_dma;
+struct ipa_dma_trans;
+struct ipa_dma_trans_pool;
 
 /* Maximum number of TREs in an IPA immediate command transaction */
 #define IPA_COMMAND_TRANS_TRE_MAX	8
 
 /**
- * struct gsi_trans - a GSI transaction
+ * struct ipa_dma_trans - a DMA transaction
  *
  * Most fields in this structure for internal use by the transaction core code:
- * @gsi:	GSI pointer
+ * @ipa_dma:	IPA DMA pointer
  * @channel_id: Channel number transaction is associated with
  * @cancelled:	If set by the core code, transaction was cancelled
  * @rsvd_count:	Number of TREs reserved for this transaction
@@ -48,8 +48,8 @@ struct gsi_trans_pool;
  * transactions it is updated later to reflect the actual number of bytes
  * received.
  */
-struct gsi_trans {
-	struct gsi *gsi;
+struct ipa_dma_trans {
+	struct ipa_dma *ipa_dma;
 	u8 channel_id;
 
 	bool cancelled;			/* true if transaction was cancelled */
@@ -81,7 +81,7 @@ struct gsi_trans {
  *
  * Return:	0 if successful, or a negative error code
  */
-int gsi_trans_pool_init(struct gsi_trans_pool *pool, size_t size, u32 count,
+int gsi_trans_pool_init(struct ipa_dma_trans_pool *pool, size_t size, u32 count,
 			u32 max_alloc);
 
 /**
@@ -91,13 +91,13 @@ int gsi_trans_pool_init(struct gsi_trans_pool *pool, size_t size, u32 count,
  *
  * Return:	Virtual address of element(s) allocated from the pool
  */
-void *gsi_trans_pool_alloc(struct gsi_trans_pool *pool, u32 count);
+void *gsi_trans_pool_alloc(struct ipa_dma_trans_pool *pool, u32 count);
 
 /**
  * gsi_trans_pool_exit() - Inverse of gsi_trans_pool_init()
  * @pool:	Pool pointer
  */
-void gsi_trans_pool_exit(struct gsi_trans_pool *pool);
+void gsi_trans_pool_exit(struct ipa_dma_trans_pool *pool);
 
 /**
  * gsi_trans_pool_init_dma() - Initialize a pool of DMA-able structures
@@ -111,7 +111,7 @@ void gsi_trans_pool_exit(struct gsi_trans_pool *pool);
  *
  * Structures in this pool reside in DMA-coherent memory.
  */
-int gsi_trans_pool_init_dma(struct device *dev, struct gsi_trans_pool *pool,
+int gsi_trans_pool_init_dma(struct device *dev, struct ipa_dma_trans_pool *pool,
 			    size_t size, u32 count, u32 max_alloc);
 
 /**
@@ -123,28 +123,28 @@ int gsi_trans_pool_init_dma(struct device *dev, struct gsi_trans_pool *pool,
  *
  * Only one element at a time may be allocated from a DMA pool.
  */
-void *gsi_trans_pool_alloc_dma(struct gsi_trans_pool *pool, dma_addr_t *addr);
+void *gsi_trans_pool_alloc_dma(struct ipa_dma_trans_pool *pool, dma_addr_t *addr);
 
 /**
  * gsi_trans_pool_exit_dma() - Inverse of gsi_trans_pool_init_dma()
  * @dev:	Device used for DMA
  * @pool:	Pool pointer
  */
-void gsi_trans_pool_exit_dma(struct device *dev, struct gsi_trans_pool *pool);
+void gsi_trans_pool_exit_dma(struct device *dev, struct ipa_dma_trans_pool *pool);
 
 /**
  * gsi_channel_trans_idle() - Return whether no transactions are allocated
- * @gsi:	GSI pointer
+ * @ipa_dma:	IPA DMA pointer
  * @channel_id:	Channel the transaction is associated with
  *
  * Return:	True if no transactions are allocated, false otherwise
  *
  */
-bool gsi_channel_trans_idle(struct gsi *gsi, u32 channel_id);
+bool gsi_channel_trans_idle(struct ipa_dma *ipa_dma, u32 channel_id);
 
 /**
  * gsi_channel_trans_alloc() - Allocate a GSI transaction on a channel
- * @gsi:	GSI pointer
+ * @ipa_dma:	IPA DMA pointer
  * @channel_id:	Channel the transaction is associated with
  * @tre_count:	Number of elements in the transaction
  * @direction:	DMA direction for entire SGL (or DMA_NONE)
@@ -152,7 +152,7 @@ bool gsi_channel_trans_idle(struct gsi *gsi, u32 channel_id);
  * Return:	A GSI transaction structure, or a null pointer if all
  *		available transactions are in use
  */
-struct gsi_trans *gsi_channel_trans_alloc(struct gsi *gsi, u32 channel_id,
+struct ipa_dma_trans *gsi_channel_trans_alloc(struct ipa_dma *ipa_dma, u32 channel_id,
 					  u32 tre_count,
 					  enum dma_data_direction direction);
 
@@ -160,7 +160,7 @@ struct gsi_trans *gsi_channel_trans_alloc(struct gsi *gsi, u32 channel_id,
  * gsi_trans_free() - Free a previously-allocated GSI transaction
  * @trans:	Transaction to be freed
  */
-void gsi_trans_free(struct gsi_trans *trans);
+void gsi_trans_free(struct ipa_dma_trans *trans);
 
 /**
  * gsi_trans_cmd_add() - Add an immediate command to a transaction
@@ -170,7 +170,7 @@ void gsi_trans_free(struct gsi_trans *trans);
  * @addr:	DMA address for payload
  * @opcode:	IPA immediate command opcode
  */
-void gsi_trans_cmd_add(struct gsi_trans *trans, void *buf, u32 size,
+void gsi_trans_cmd_add(struct ipa_dma_trans *trans, void *buf, u32 size,
 		       dma_addr_t addr, enum ipa_cmd_opcode opcode);
 
 /**
@@ -180,7 +180,7 @@ void gsi_trans_cmd_add(struct gsi_trans *trans, void *buf, u32 size,
  * @size:	Number of bytes (starting at offset) to transfer
  * @offset:	Offset within page for start of transfer
  */
-int gsi_trans_page_add(struct gsi_trans *trans, struct page *page, u32 size,
+int gsi_trans_page_add(struct ipa_dma_trans *trans, struct page *page, u32 size,
 		       u32 offset);
 
 /**
@@ -190,41 +190,41 @@ int gsi_trans_page_add(struct gsi_trans *trans, struct page *page, u32 size,
  *
  * Return:	0, or -EMSGSIZE if socket data won't fit in transaction.
  */
-int gsi_trans_skb_add(struct gsi_trans *trans, struct sk_buff *skb);
+int gsi_trans_skb_add(struct ipa_dma_trans *trans, struct sk_buff *skb);
 
 /**
  * gsi_trans_commit() - Commit a GSI transaction
  * @trans:	Transaction to commit
  * @ring_db:	Whether to tell the hardware about these queued transfers
  */
-void gsi_trans_commit(struct gsi_trans *trans, bool ring_db);
+void gsi_trans_commit(struct ipa_dma_trans *trans, bool ring_db);
 
 /**
  * gsi_trans_commit_wait() - Commit a GSI transaction and wait for it
  *			     to complete
  * @trans:	Transaction to commit
  */
-void gsi_trans_commit_wait(struct gsi_trans *trans);
+void gsi_trans_commit_wait(struct ipa_dma_trans *trans);
 
 /**
  * gsi_trans_read_byte() - Issue a single byte read TRE on a channel
- * @gsi:	GSI pointer
+ * @ipa_dma:	IPA DMA pointer
  * @channel_id:	Channel on which to read a byte
  * @addr:	DMA address into which to transfer the one byte
  *
  * This is not a transaction operation at all.  It's defined here because
  * it needs to be done in coordination with other transaction activity.
  */
-int gsi_trans_read_byte(struct gsi *gsi, u32 channel_id, dma_addr_t addr);
+int gsi_trans_read_byte(struct ipa_dma *ipa_dma, u32 channel_id, dma_addr_t addr);
 
 /**
  * gsi_trans_read_byte_done() - Clean up after a single byte read TRE
- * @gsi:	GSI pointer
+ * @ipa_dma:	IPA DMA pointer
  * @channel_id:	Channel on which byte was read
  *
  * This function needs to be called to signal that the work related
  * to reading a byte initiated by gsi_trans_read_byte() is complete.
  */
-void gsi_trans_read_byte_done(struct gsi *gsi, u32 channel_id);
+void gsi_trans_read_byte_done(struct ipa_dma *ipa_dma, u32 channel_id);
 
 #endif /* _GSI_TRANS_H_ */

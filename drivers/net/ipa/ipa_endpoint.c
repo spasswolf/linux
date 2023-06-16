@@ -11,7 +11,7 @@
 #include <linux/if_rmnet.h>
 #include <linux/dma-direction.h>
 
-#include "gsi.h"
+#include "ipa_dma.h"
 #include "gsi_trans.h"
 #include "ipa.h"
 #include "ipa_data.h"
@@ -229,10 +229,10 @@ static u32 ipa_aggr_size_kb(u32 rx_buffer_size, bool aggr_hard_limit)
 }
 
 static bool ipa_endpoint_data_valid_one(struct ipa *ipa, u32 count,
-			    const struct ipa_gsi_endpoint_data *all_data,
-			    const struct ipa_gsi_endpoint_data *data)
+			    const struct ipa_dma_endpoint_data *all_data,
+			    const struct ipa_dma_endpoint_data *data)
 {
-	const struct ipa_gsi_endpoint_data *other_data;
+	const struct ipa_dma_endpoint_data *other_data;
 	struct device *dev = &ipa->pdev->dev;
 	enum ipa_endpoint_name other_name;
 
@@ -385,9 +385,9 @@ static bool ipa_endpoint_data_valid_one(struct ipa *ipa, u32 count,
 
 /* Validate endpoint configuration data.  Return max defined endpoint ID */
 static u32 ipa_endpoint_max(struct ipa *ipa, u32 count,
-			    const struct ipa_gsi_endpoint_data *data)
+			    const struct ipa_dma_endpoint_data *data)
 {
-	const struct ipa_gsi_endpoint_data *dp = data;
+	const struct ipa_dma_endpoint_data *dp = data;
 	struct device *dev = &ipa->pdev->dev;
 	enum ipa_endpoint_name name;
 	u32 max;
@@ -427,16 +427,16 @@ static u32 ipa_endpoint_max(struct ipa *ipa, u32 count,
 }
 
 /* Allocate a transaction to use on a non-command endpoint */
-static struct gsi_trans *ipa_endpoint_trans_alloc(struct ipa_endpoint *endpoint,
+static struct ipa_dma_trans *ipa_endpoint_trans_alloc(struct ipa_endpoint *endpoint,
 						  u32 tre_count)
 {
-	struct gsi *gsi = &endpoint->ipa->gsi;
+	struct ipa_dma *ipa_dma = &endpoint->ipa->ipa_dma;
 	u32 channel_id = endpoint->channel_id;
 	enum dma_data_direction direction;
 
 	direction = endpoint->toward_ipa ? DMA_TO_DEVICE : DMA_FROM_DEVICE;
 
-	return gsi_channel_trans_alloc(gsi, channel_id, tre_count, direction);
+	return gsi_channel_trans_alloc(ipa_dma, channel_id, tre_count, direction);
 }
 
 /* suspend_delay represents suspend for RX, delay for TX endpoints.
@@ -574,6 +574,7 @@ ipa_endpoint_program_suspend(struct ipa_endpoint *endpoint, bool enable)
  */
 void ipa_endpoint_modem_pause_all(struct ipa *ipa, bool enable)
 {
+	struct ipa_dma *ipa_dma = &ipa->ipa_dma;
 	u32 endpoint_id = 0;
 
 	while (endpoint_id < ipa->endpoint_count) {
@@ -587,7 +588,7 @@ void ipa_endpoint_modem_pause_all(struct ipa *ipa, bool enable)
 		else if (ipa->version < IPA_VERSION_4_2)
 			ipa_endpoint_program_delay(endpoint, enable);
 		else
-			ipa->gsi.ops->modem_channel_flow_control(&ipa->gsi,
+			ipa_dma->ops->modem_channel_flow_control(ipa_dma,
 						       endpoint->channel_id,
 						       enable);
 	}
@@ -596,7 +597,7 @@ void ipa_endpoint_modem_pause_all(struct ipa *ipa, bool enable)
 /* Reset all modem endpoints to use the default exception endpoint */
 int ipa_endpoint_modem_exception_reset_all(struct ipa *ipa)
 {
-	struct gsi_trans *trans;
+	struct ipa_dma_trans *trans;
 	u32 endpoint_id;
 	u32 count;
 
@@ -633,7 +634,7 @@ int ipa_endpoint_modem_exception_reset_all(struct ipa *ipa)
 
 	ipa_cmd_pipeline_clear_add(trans);
 
-	trans->gsi->ops->trans_commit_wait(trans);
+	trans->ipa_dma->ops->trans_commit_wait(trans);
 
 	ipa_cmd_pipeline_clear_wait(ipa);
 
@@ -1232,7 +1233,7 @@ static void ipa_endpoint_init_seq(struct ipa_endpoint *endpoint)
  */
 int ipa_endpoint_skb_tx(struct ipa_endpoint *endpoint, struct sk_buff *skb)
 {
-	struct gsi_trans *trans;
+	struct ipa_dma_trans *trans;
 	u32 nr_frags;
 	int ret;
 
@@ -1256,7 +1257,7 @@ int ipa_endpoint_skb_tx(struct ipa_endpoint *endpoint, struct sk_buff *skb)
 		goto err_trans_free;
 	trans->data = skb;	/* transaction owns skb now */
 
-	trans->gsi->ops->trans_commit(trans, !netdev_xmit_more());
+	trans->ipa_dma->ops->trans_commit(trans, !netdev_xmit_more());
 
 	return 0;
 
@@ -1295,7 +1296,7 @@ static void ipa_endpoint_status(struct ipa_endpoint *endpoint)
 }
 
 static int ipa_endpoint_replenish_one(struct ipa_endpoint *endpoint,
-				      struct gsi_trans *trans)
+				      struct ipa_dma_trans *trans)
 {
 	struct page *page;
 	u32 buffer_size;
@@ -1334,7 +1335,7 @@ static int ipa_endpoint_replenish_one(struct ipa_endpoint *endpoint,
  */
 static void ipa_endpoint_replenish(struct ipa_endpoint *endpoint)
 {
-	struct gsi_trans *trans;
+	struct ipa_dma_trans *trans;
 
 	if (!test_bit(IPA_REPLENISH_ENABLED, endpoint->replenish_flags))
 		return;
@@ -1352,7 +1353,7 @@ static void ipa_endpoint_replenish(struct ipa_endpoint *endpoint)
 
 		/* Ring the doorbell if we've got a full batch */
 		doorbell = !(++endpoint->replenish_count % IPA_REPLENISH_BATCH);
-		trans->gsi->ops->trans_commit(trans, doorbell);
+		trans->ipa_dma->ops->trans_commit(trans, doorbell);
 	}
 
 	clear_bit(IPA_REPLENISH_ACTIVE, endpoint->replenish_flags);
@@ -1369,7 +1370,7 @@ try_again_later:
 	 * If the hardware has no receive buffers queued, schedule work to
 	 * try replenishing again.
 	 */
-	if (gsi_channel_trans_idle(&endpoint->ipa->gsi, endpoint->channel_id))
+	if (gsi_channel_trans_idle(&endpoint->ipa->ipa_dma, endpoint->channel_id))
 		schedule_delayed_work(&endpoint->replenish_work,
 				      msecs_to_jiffies(1));
 }
@@ -1379,7 +1380,7 @@ static void ipa_endpoint_replenish_enable(struct ipa_endpoint *endpoint)
 	set_bit(IPA_REPLENISH_ENABLED, endpoint->replenish_flags);
 
 	/* Start replenishing if hardware currently has no buffers */
-	if (gsi_channel_trans_idle(&endpoint->ipa->gsi, endpoint->channel_id))
+	if (gsi_channel_trans_idle(&endpoint->ipa->ipa_dma, endpoint->channel_id))
 		ipa_endpoint_replenish(endpoint);
 }
 
@@ -1592,7 +1593,7 @@ static void ipa_endpoint_status_parse(struct ipa_endpoint *endpoint,
 }
 
 void ipa_endpoint_trans_complete(struct ipa_endpoint *endpoint,
-				 struct gsi_trans *trans)
+				 struct ipa_dma_trans *trans)
 {
 	struct page *page;
 
@@ -1613,7 +1614,7 @@ done:
 }
 
 void ipa_endpoint_trans_release(struct ipa_endpoint *endpoint,
-				struct gsi_trans *trans)
+				struct ipa_dma_trans *trans)
 {
 	if (endpoint->toward_ipa) {
 		struct ipa *ipa = endpoint->ipa;
@@ -1668,7 +1669,7 @@ static int ipa_endpoint_reset_rx_aggr(struct ipa_endpoint *endpoint)
 {
 	struct device *dev = &endpoint->ipa->pdev->dev;
 	struct ipa *ipa = endpoint->ipa;
-	struct gsi *gsi = &ipa->gsi;
+	struct ipa_dma *ipa_dma = &ipa->ipa_dma;
 	bool suspended = false;
 	dma_addr_t addr;
 	u32 retries;
@@ -1694,17 +1695,17 @@ static int ipa_endpoint_reset_rx_aggr(struct ipa_endpoint *endpoint)
 	 * active.  We'll re-enable the doorbell (if appropriate) when
 	 * we reset again below.
 	 */
-	gsi->ops->channel_reset(gsi, endpoint->channel_id, false);
+	ipa_dma->ops->channel_reset(ipa_dma, endpoint->channel_id, false);
 
 	/* Make sure the channel isn't suspended */
 	suspended = ipa_endpoint_program_suspend(endpoint, false);
 
 	/* Start channel and do a 1 byte read */
-	ret = gsi->ops->channel_start(gsi, endpoint->channel_id);
+	ret = ipa_dma->ops->channel_start(ipa_dma, endpoint->channel_id);
 	if (ret)
 		goto out_suspend_again;
 
-	ret = gsi_trans_read_byte(gsi, endpoint->channel_id, addr);
+	ret = gsi_trans_read_byte(ipa_dma, endpoint->channel_id, addr);
 	if (ret)
 		goto err_endpoint_stop;
 
@@ -1721,9 +1722,9 @@ static int ipa_endpoint_reset_rx_aggr(struct ipa_endpoint *endpoint)
 		dev_err(dev, "endpoint %u still active during reset\n",
 			endpoint->endpoint_id);
 
-	gsi_trans_read_byte_done(gsi, endpoint->channel_id);
+	gsi_trans_read_byte_done(ipa_dma, endpoint->channel_id);
 
-	ret = gsi->ops->channel_stop(gsi, endpoint->channel_id);
+	ret = ipa_dma->ops->channel_stop(ipa_dma, endpoint->channel_id);
 	if (ret)
 		goto out_suspend_again;
 
@@ -1732,14 +1733,14 @@ static int ipa_endpoint_reset_rx_aggr(struct ipa_endpoint *endpoint)
 	 * complete the channel reset sequence.  Finish by suspending the
 	 * channel again (if necessary).
 	 */
-	gsi->ops->channel_reset(gsi, endpoint->channel_id, true);
+	ipa_dma->ops->channel_reset(ipa_dma, endpoint->channel_id, true);
 
 	usleep_range(USEC_PER_MSEC, 2 * USEC_PER_MSEC);
 
 	goto out_suspend_again;
 
 err_endpoint_stop:
-	(void)gsi->ops->channel_stop(gsi, endpoint->channel_id);
+	(void)ipa_dma->ops->channel_stop(ipa_dma, endpoint->channel_id);
 out_suspend_again:
 	if (suspended)
 		(void)ipa_endpoint_program_suspend(endpoint, true);
@@ -1754,7 +1755,7 @@ static void ipa_endpoint_reset(struct ipa_endpoint *endpoint)
 {
 	u32 channel_id = endpoint->channel_id;
 	struct ipa *ipa = endpoint->ipa;
-	struct gsi *gsi = &ipa->gsi;
+	struct ipa_dma *ipa_dma = &ipa->ipa_dma;
 	bool special;
 	int ret = 0;
 
@@ -1767,7 +1768,7 @@ static void ipa_endpoint_reset(struct ipa_endpoint *endpoint)
 	if (special && ipa_endpoint_aggr_active(endpoint))
 		ret = ipa_endpoint_reset_rx_aggr(endpoint);
 	else
-		gsi->ops->channel_reset(gsi, channel_id, true);
+		ipa_dma->ops->channel_reset(ipa_dma, channel_id, true);
 
 	if (ret)
 		dev_err(&ipa->pdev->dev,
@@ -1813,10 +1814,10 @@ int ipa_endpoint_enable_one(struct ipa_endpoint *endpoint)
 {
 	u32 endpoint_id = endpoint->endpoint_id;
 	struct ipa *ipa = endpoint->ipa;
-	struct gsi *gsi = &ipa->gsi;
+	struct ipa_dma *ipa_dma = &ipa->ipa_dma;
 	int ret;
 
-	ret = gsi->ops->channel_start(gsi, endpoint->channel_id);
+	ret = ipa_dma->ops->channel_start(ipa_dma, endpoint->channel_id);
 	if (ret) {
 		dev_err(&ipa->pdev->dev,
 			"error %d starting %cX channel %u for endpoint %u\n",
@@ -1839,7 +1840,7 @@ void ipa_endpoint_disable_one(struct ipa_endpoint *endpoint)
 {
 	u32 endpoint_id = endpoint->endpoint_id;
 	struct ipa *ipa = endpoint->ipa;
-	struct gsi *gsi = &ipa->gsi;
+	struct ipa_dma *ipa_dma = &ipa->ipa_dma;
 	int ret;
 
 	if (!test_bit(endpoint_id, ipa->enabled))
@@ -1853,7 +1854,7 @@ void ipa_endpoint_disable_one(struct ipa_endpoint *endpoint)
 	}
 
 	/* Note that if stop fails, the channel's state is not well-defined */
-	ret = gsi->ops->channel_stop(gsi, endpoint->channel_id);
+	ret = ipa_dma->ops->channel_stop(ipa_dma, endpoint->channel_id);
 	if (ret)
 		dev_err(&ipa->pdev->dev,
 			"error %d attempting to stop endpoint %u\n", ret,
@@ -1863,7 +1864,7 @@ void ipa_endpoint_disable_one(struct ipa_endpoint *endpoint)
 void ipa_endpoint_suspend_one(struct ipa_endpoint *endpoint)
 {
 	struct device *dev = &endpoint->ipa->pdev->dev;
-	struct gsi *gsi = &endpoint->ipa->gsi;
+	struct ipa_dma *ipa_dma = &endpoint->ipa->ipa_dma;
 	int ret;
 
 	if (!test_bit(endpoint->endpoint_id, endpoint->ipa->enabled))
@@ -1874,7 +1875,7 @@ void ipa_endpoint_suspend_one(struct ipa_endpoint *endpoint)
 		(void)ipa_endpoint_program_suspend(endpoint, true);
 	}
 
-	ret = gsi->ops->channel_suspend(gsi, endpoint->channel_id);
+	ret = ipa_dma->ops->channel_suspend(ipa_dma, endpoint->channel_id);
 	if (ret)
 		dev_err(dev, "error %d suspending channel %u\n", ret,
 			endpoint->channel_id);
@@ -1883,7 +1884,7 @@ void ipa_endpoint_suspend_one(struct ipa_endpoint *endpoint)
 void ipa_endpoint_resume_one(struct ipa_endpoint *endpoint)
 {
 	struct device *dev = &endpoint->ipa->pdev->dev;
-	struct gsi *gsi = &endpoint->ipa->gsi;
+	struct ipa_dma *ipa_dma = &endpoint->ipa->ipa_dma;
 	int ret;
 
 	if (!test_bit(endpoint->endpoint_id, endpoint->ipa->enabled))
@@ -1892,7 +1893,7 @@ void ipa_endpoint_resume_one(struct ipa_endpoint *endpoint)
 	if (!endpoint->toward_ipa)
 		(void)ipa_endpoint_program_suspend(endpoint, false);
 
-	ret = gsi->ops->channel_resume(gsi, endpoint->channel_id);
+	ret = ipa_dma->ops->channel_resume(ipa_dma, endpoint->channel_id);
 	if (ret)
 		dev_err(dev, "error %d resuming channel %u\n", ret,
 			endpoint->channel_id);
@@ -1926,14 +1927,14 @@ void ipa_endpoint_resume(struct ipa *ipa)
 
 static void ipa_endpoint_setup_one(struct ipa_endpoint *endpoint)
 {
-	struct gsi *gsi = &endpoint->ipa->gsi;
+	struct ipa_dma *ipa_dma = &endpoint->ipa->ipa_dma;
 	u32 channel_id = endpoint->channel_id;
 
 	/* Only AP endpoints get set up */
 	if (endpoint->ee_id != DMA_EE_AP)
 		return;
 
-	endpoint->skb_frag_max = gsi->channel[channel_id].trans_tre_max - 1;
+	endpoint->skb_frag_max = ipa_dma->channel[channel_id].trans_tre_max - 1;
 	if (!endpoint->toward_ipa) {
 		/* RX transactions require a single TRE, so the maximum
 		 * backlog is the same as the maximum outstanding TREs.
@@ -2088,7 +2089,7 @@ err_free_bitmap:
 }
 
 static void ipa_endpoint_init_one(struct ipa *ipa, enum ipa_endpoint_name name,
-				  const struct ipa_gsi_endpoint_data *data)
+				  const struct ipa_dma_endpoint_data *data)
 {
 	struct ipa_endpoint *endpoint;
 
@@ -2137,7 +2138,7 @@ void ipa_endpoint_exit(struct ipa *ipa)
 
 /* Returns a bitmask of endpoints that support filtering, or 0 on error */
 int ipa_endpoint_init(struct ipa *ipa, u32 count,
-		      const struct ipa_gsi_endpoint_data *data)
+		      const struct ipa_dma_endpoint_data *data)
 {
 	enum ipa_endpoint_name name;
 	u32 filtered;

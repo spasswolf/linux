@@ -10,9 +10,9 @@
 
 #include <linux/types.h>
 
-struct gsi_trans;
-struct gsi_ring;
-struct gsi_channel;
+struct ipa_dma_trans;
+struct ipa_dma_ring;
+struct ipa_dma_channel;
 
 #define GSI_RING_ELEMENT_SIZE	16	/* bytes; must be a power of 2 */
 
@@ -20,13 +20,13 @@ struct gsi_channel;
  * gsi_trans_move_complete() - Mark a GSI transaction completed
  * @trans:	Transaction whose state is to be updated
  */
-void gsi_trans_move_complete(struct gsi_trans *trans);
+void gsi_trans_move_complete(struct ipa_dma_trans *trans);
 
 /**
  * gsi_trans_move_polled() - Mark a transaction polled
  * @trans:	Transaction whose state is to be updated
  */
-void gsi_trans_move_polled(struct gsi_trans *trans);
+void gsi_trans_move_polled(struct ipa_dma_trans *trans);
 
 /**
  * gsi_trans_complete() - Complete a GSI transaction
@@ -34,7 +34,7 @@ void gsi_trans_move_polled(struct gsi_trans *trans);
  *
  * Marks a transaction complete (including freeing it).
  */
-void gsi_trans_complete(struct gsi_trans *trans);
+void gsi_trans_complete(struct ipa_dma_trans *trans);
 
 /**
  * gsi_channel_trans_mapped() - Return a transaction mapped to a TRE index
@@ -43,7 +43,7 @@ void gsi_trans_complete(struct gsi_trans *trans);
  *
  * Return:	The GSI transaction pointer associated with the TRE index
  */
-struct gsi_trans *gsi_channel_trans_mapped(struct gsi_channel *channel,
+struct ipa_dma_trans *gsi_channel_trans_mapped(struct ipa_dma_channel *channel,
 					   u32 index);
 
 /**
@@ -52,7 +52,7 @@ struct gsi_trans *gsi_channel_trans_mapped(struct gsi_channel *channel,
  *
  * Return:	The next completed transaction, or NULL if nothing new
  */
-struct gsi_trans *gsi_channel_trans_complete(struct gsi_channel *channel);
+struct ipa_dma_trans *gsi_channel_trans_complete(struct ipa_dma_channel *channel);
 
 /**
  * gsi_channel_trans_cancel_pending() - Cancel pending transactions
@@ -66,28 +66,28 @@ struct gsi_trans *gsi_channel_trans_complete(struct gsi_channel *channel);
  * NOTE:  Transactions already complete at the time of this call are
  *	  unaffected.
  */
-void gsi_channel_trans_cancel_pending(struct gsi_channel *channel);
+void gsi_channel_trans_cancel_pending(struct ipa_dma_channel *channel);
 
 /**
  * gsi_channel_trans_init() - Initialize a channel's GSI transaction info
- * @gsi:	GSI pointer
+ * @ipa_dma:	IPA_DMA pointer
  * @channel_id:	Channel number
  *
  * Return:	0 if successful, or -ENOMEM on allocation failure
  *
  * Creates and sets up information for managing transactions on a channel
  */
-int gsi_channel_trans_init(struct gsi *gsi, u32 channel_id);
+int gsi_channel_trans_init(struct ipa_dma *ipa_dma, u32 channel_id);
 
 /**
  * gsi_channel_trans_exit() - Inverse of gsi_channel_trans_init()
  * @channel:	Channel whose transaction information is to be cleaned up
  */
-void gsi_channel_trans_exit(struct gsi_channel *channel);
+void gsi_channel_trans_exit(struct ipa_dma_channel *channel);
 
 /* 
  * gsi_channel_tre_max() - Channel maximum number of in-flight TREs
- * @gsi:	GSI pointer
+ * @ipa_dma:	IPA DMA pointer
  * @channel_id:	Channel whose limit is to be returned
  *
  * Return:	The maximum number of TREs outstanding on the channel
@@ -112,9 +112,9 @@ void gsi_channel_trans_exit(struct gsi_channel *channel);
  * substantially reduce pool memory requirements.  The number we
  * reduce it by matches the number added in gsi_trans_pool_init().
  */
-static inline u32 gsi_channel_tre_max(struct gsi *gsi, u32 channel_id)
+static inline u32 gsi_channel_tre_max(struct ipa_dma *ipa_dma, u32 channel_id)
 {
-	struct gsi_channel *channel = &gsi->channel[channel_id];
+	struct ipa_dma_channel *channel = &ipa_dma->channel[channel_id];
 
 	/* Hardware limit is channel->tre_count - 1 */
 	return channel->tre_count - (channel->trans_tre_max - 1);
