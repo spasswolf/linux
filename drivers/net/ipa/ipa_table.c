@@ -8,6 +8,7 @@
 #include <linux/kernel.h>
 #include <linux/bits.h>
 #include <linux/bitops.h>
+#include <linux/module.h>
 #include <linux/bitfield.h>
 #include <linux/io.h>
 #include <linux/build_bug.h>
@@ -119,12 +120,6 @@
  *                 ----------------------
  */
 
-/* Filter or route rules consist of a set of 32-bit values followed by a
- * 32-bit all-zero rule list terminator.  The "zero rule" is simply an
- * all-zero rule followed by the list terminator.
- */
-#define IPA_ZERO_RULE_SIZE		(2 * sizeof(__le32))
-
 /* Check things that can be validated at build time. */
 static void ipa_table_validate_build(void)
 {
@@ -136,12 +131,6 @@ static void ipa_table_validate_build(void)
 	 * initialize tables.
 	 */
 	BUILD_BUG_ON(sizeof(dma_addr_t) > sizeof(__le64));
-
-	/* A "zero rule" is used to represent no filtering or no routing.
-	 * It is a 64-bit block of zeroed memory.  Code in ipa_table_init()
-	 * assumes that it can be written using a pointer to __le64.
-	 */
-	BUILD_BUG_ON(IPA_ZERO_RULE_SIZE != sizeof(__le64));
 }
 
 static const struct ipa_mem *
@@ -204,6 +193,8 @@ static void ipa_table_reset_add(struct ipa_dma_trans *trans, bool filter,
 {
 	struct ipa *ipa = container_of(trans->ipa_dma, struct ipa, ipa_dma);
 	const struct ipa_mem *mem;
+	const size_t entry_size = ipa->version > IPA_VERSION_2_6L ?
+				sizeof(__le64) : sizeof(__le32);
 	dma_addr_t addr;
 	u32 offset;
 	u16 size;
@@ -216,8 +207,8 @@ static void ipa_table_reset_add(struct ipa_dma_trans *trans, bool filter,
 	if (filter)
 		first++;	/* skip over bitmap */
 
-	offset = mem->offset + first * sizeof(__le64);
-	size = count * sizeof(__le64);
+	offset = mem->offset + first * entry_size;
+	size = count * entry_size;
 	addr = ipa_table_addr(ipa, false, count);
 
 	ipa_cmd_dma_shared_mem_add(trans, offset, size, addr, true);
@@ -383,9 +374,11 @@ int ipa_table_hash_flush(struct ipa *ipa)
 static void ipa_table_init_add(struct ipa_dma_trans *trans, bool filter, bool ipv6)
 {
 	struct ipa *ipa = container_of(trans->ipa_dma, struct ipa, ipa_dma);
+	const struct ipa_mem *mem;
 	const struct ipa_mem *hash_mem;
 	enum ipa_cmd_opcode opcode;
-	const struct ipa_mem *mem;
+	const size_t entry_size = ipa->version > IPA_VERSION_2_6L ?
+				sizeof(__le64) : sizeof(__le32);
 	dma_addr_t hash_addr;
 	dma_addr_t addr;
 	u32 hash_offset;
@@ -414,20 +407,28 @@ static void ipa_table_init_add(struct ipa_dma_trans *trans, bool filter, bool ip
 		 * table is either the same as the non-hashed one, or zero.
 		 */
 		count = 1 + hweight64(ipa->filtered);
-		hash_count = hash_mem && hash_mem->size ? count : 0;
+		if (hash_mem)
+			hash_count = hash_mem->size ? count : 0;
 	} else {
 		/* The size of a route table region determines the number
 		 * of entries it has.
 		 */
-		count = mem->size / sizeof(__le64);
-		hash_count = hash_mem ? hash_mem->size / sizeof(__le64) : 0;
+		count = mem->size / entry_size;
+		if (hash_mem)
+			hash_count = hash_mem->size / entry_size;
 	}
-	size = count * sizeof(__le64);
-	hash_size = hash_count * sizeof(__le64);
+	size = count * entry_size;
+	if (hash_mem)
+		hash_size = hash_count * entry_size;
+	else
+		hash_size = 0;
 
 	addr = ipa_table_addr(ipa, filter, count);
-	hash_addr = ipa_table_addr(ipa, filter, hash_count);
+	if (hash_mem)
+		hash_addr = ipa_table_addr(ipa, filter, hash_count);
 
+	/* if hash_size is zero ipa_cmd_table_init_add ignores
+	 * hash_offset and hash_addr */
 	ipa_cmd_table_init_add(trans, opcode, size, mem->offset, addr,
 			       hash_size, hash_offset, hash_addr);
 	if (!filter)
@@ -678,7 +679,22 @@ bool ipa_table_mem_valid(struct ipa *ipa, bool filter)
 	return true;
 }
 
-/* Initialize a coherent DMA allocation containing initialized filter and
+static inline void *ipa_table_write(enum ipa_version version,
+				   void *virt, u64 value)
+{
+	if (version > IPA_VERSION_2_6L) {
+		__le64 *ptr = virt;
+		*ptr = cpu_to_le64(value);
+		return virt + sizeof(__le64);
+	} else {
+		__le32 *ptr = virt;
+		*ptr = cpu_to_le32(value);
+		return virt + sizeof(__le32);
+	}
+}
+
+/*
+ * Initialize a coherent DMA allocation containing initialized filter and
  * route table data.  This is used when initializing or resetting the IPA
  * filter or route table.
  *
@@ -711,10 +727,13 @@ bool ipa_table_mem_valid(struct ipa *ipa, bool filter)
  */
 int ipa_table_init(struct ipa *ipa)
 {
+	enum ipa_version version = ipa->version;
 	struct device *dev = &ipa->pdev->dev;
+	u64 filter_map;
+	const size_t entry_size = ipa->version > IPA_VERSION_2_6L ?
+				sizeof(__le64) : sizeof(__le32);
 	dma_addr_t addr;
-	__le64 le_addr;
-	__le64 *virt;
+	void *virt;
 	size_t size;
 	u32 count;
 
@@ -722,13 +741,14 @@ int ipa_table_init(struct ipa *ipa)
 
 	count = max_t(u32, ipa->filter_count, ipa->route_count);
 
+	/* TODO: See if this comment is correct for v2.* */ 
 	/* The IPA hardware requires route and filter table rules to be
 	 * aligned on a 128-byte boundary.  We put the "zero rule" at the
 	 * base of the table area allocated here.  The DMA address returned
 	 * by dma_alloc_coherent() is guaranteed to be a power-of-2 number
 	 * of pages, which satisfies the rule alignment requirement.
 	 */
-	size = IPA_ZERO_RULE_SIZE + (1 + count) * sizeof(__le64);
+	size = entry_size + (1 + count) * entry_size;
 	virt = dma_alloc_coherent(dev, size, &addr, GFP_KERNEL);
 	if (!virt)
 		return -ENOMEM;
@@ -737,7 +757,7 @@ int ipa_table_init(struct ipa *ipa)
 	ipa->table_addr = addr;
 
 	/* First slot is the zero rule */
-	*virt++ = 0;
+	virt = ipa_table_write(version, virt, 0);
 
 	/* Next is the filter table bitmap.  The "soft" bitmap value might
 	 * need to be converted to the hardware representation by shifting
@@ -745,15 +765,18 @@ int ipa_table_init(struct ipa *ipa)
 	 * filtering, which is possible but not used.  IPA v5.0+ eliminated
 	 * that option, so there's no shifting required.
 	 */
-	if (ipa->version < IPA_VERSION_5_0)
-		*virt++ = cpu_to_le64(ipa->filtered << 1);
+	if (version <= IPA_VERSION_2_6L)
+		filter_map = (ipa->filtered << 1 ) | 1;
+	else if (ipa->version < IPA_VERSION_5_0)
+		filter_map = ipa->filtered << 1;
 	else
-		*virt++ = cpu_to_le64(ipa->filtered);
+		filter_map = ipa->filtered;
+
+	virt = ipa_table_write(version, virt, filter_map);
 
 	/* All the rest contain the DMA address of the zero rule */
-	le_addr = cpu_to_le64(addr);
 	while (count--)
-		*virt++ = le_addr;
+		virt = ipa_table_write(version, virt, addr);
 
 	return 0;
 }
@@ -762,9 +785,12 @@ void ipa_table_exit(struct ipa *ipa)
 {
 	u32 count = max_t(u32, 1 + ipa->filter_count, ipa->route_count);
 	struct device *dev = &ipa->pdev->dev;
+	const size_t entry_size = ipa->version > IPA_VERSION_2_6L ?
+				sizeof(__le64) : sizeof(__le32);
+
 	size_t size;
 
-	size = IPA_ZERO_RULE_SIZE + (1 + count) * sizeof(__le64);
+	size = entry_size + (1 + count) * entry_size;
 
 	dma_free_coherent(dev, size, ipa->table_virt, ipa->table_addr);
 	ipa->table_addr = 0;
