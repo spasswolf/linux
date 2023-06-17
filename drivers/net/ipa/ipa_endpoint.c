@@ -36,13 +36,17 @@
 
 /** enum ipa_status_opcode - IPA status opcode field hardware values */
 enum ipa_status_opcode {				/* *Not* a bitmask */
-	IPA_STATUS_OPCODE_PACKET		= 1,
-	IPA_STATUS_OPCODE_NEW_RULE_PACKET	= 2,
-	IPA_STATUS_OPCODE_DROPPED_PACKET	= 4,
-	IPA_STATUS_OPCODE_SUSPENDED_PACKET	= 8,
-	IPA_STATUS_OPCODE_LOG			= 16,
-	IPA_STATUS_OPCODE_DCMP			= 32,
-	IPA_STATUS_OPCODE_PACKET_2ND_PASS	= 64,
+	IPA_V2_STATUS_OPCODE_PACKET		= 0,
+	IPA_V2_STATUS_OPCODE_DROPPED_PACKET	= 2,
+	IPA_V2_STATUS_OPCODE_SUSPENDED_PACKET	= 3,
+	IPA_V2_STATUS_OPCODE_XLAT_PACKET	= 6,
+	IPA_V3_STATUS_OPCODE_PACKET		= 1,
+	IPA_V3_STATUS_OPCODE_NEW_RULE_PACKET	= 2,
+	IPA_V3_STATUS_OPCODE_DROPPED_PACKET	= 4,
+	IPA_V3_STATUS_OPCODE_SUSPENDED_PACKET	= 8,
+	IPA_V3_STATUS_OPCODE_LOG		= 16,
+	IPA_V3_STATUS_OPCODE_DCMP		= 32,
+	IPA_V3_STATUS_OPCODE_PACKET_2ND_PASS	= 64,
 };
 
 /** enum ipa_status_exception - IPA status exception field hardware values */
@@ -1461,16 +1465,29 @@ static bool ipa_endpoint_skb_build(struct ipa_endpoint *endpoint,
  /* The format of an IPA packet status structure is the same for several
   * status types (opcodes).  Other types aren't currently supported.
  */
-static bool ipa_status_format_packet(enum ipa_status_opcode opcode)
+static bool ipa_status_format_packet(struct ipa *ipa,
+				     enum ipa_status_opcode opcode)
 {
-	switch (opcode) {
-	case IPA_STATUS_OPCODE_PACKET:
-	case IPA_STATUS_OPCODE_DROPPED_PACKET:
-	case IPA_STATUS_OPCODE_SUSPENDED_PACKET:
-	case IPA_STATUS_OPCODE_PACKET_2ND_PASS:
-		return true;
-	default:
-		return false;
+	if (ipa->version <= IPA_VERSION_2_6L) {
+		switch (opcode) {
+		case IPA_V2_STATUS_OPCODE_PACKET:
+		case IPA_V2_STATUS_OPCODE_DROPPED_PACKET:
+		case IPA_V2_STATUS_OPCODE_SUSPENDED_PACKET:
+		case IPA_V2_STATUS_OPCODE_XLAT_PACKET:
+			return true;
+		default:
+			return false;
+		}
+	} else {
+		switch (opcode) {
+		case IPA_V3_STATUS_OPCODE_PACKET:
+		case IPA_V3_STATUS_OPCODE_DROPPED_PACKET:
+		case IPA_V3_STATUS_OPCODE_SUSPENDED_PACKET:
+		case IPA_V3_STATUS_OPCODE_PACKET_2ND_PASS:
+			return true;
+		default:
+			return false;
+		}
 	}
 }
 
@@ -1482,7 +1499,7 @@ ipa_endpoint_status_skip(struct ipa_endpoint *endpoint, const void *data)
 	u32 endpoint_id;
 
 	opcode = ipa_status_extract(ipa, data, STATUS_OPCODE);
-	if (!ipa_status_format_packet(opcode))
+	if (!ipa_status_format_packet(ipa, opcode))
 		return true;
 
 	endpoint_id = ipa_status_extract(ipa, data, STATUS_DST_ENDPOINT);
