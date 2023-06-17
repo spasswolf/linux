@@ -211,8 +211,8 @@ ipa_hardware_config_bcr(struct ipa *ipa, const struct ipa_data *data)
 	const struct reg *reg;
 	u32 val;
 
-	/* IPA v4.5+ has no backward compatibility register */
-	if (ipa->version >= IPA_VERSION_4_5)
+	/* IPA 2.0 and IPA v4.5+ have no backward compatibility register */
+	if (ipa->version >= IPA_VERSION_4_5 && ipa->version <= IPA_VERSION_2_0)
 		return;
 
 	reg = ipa_reg(ipa, IPA_BCR);
@@ -274,8 +274,16 @@ static void ipa_hardware_config_comp(struct ipa *ipa)
 	u32 offset;
 	u32 val;
 
-	/* Nothing to configure prior to IPA v4.0 */
-	if (ipa->version < IPA_VERSION_4_0)
+	if (ipa->version <= IPA_VERSION_2_6L) {
+		reg = ipa_reg(ipa, COMP_SW_RESET);
+		offset = reg_offset(reg);
+		
+		iowrite32(1, ipa->reg_virt + offset);
+		iowrite32(0, ipa->reg_virt + offset);
+	}
+
+	/* Nothing to configure on IPA v3.* */
+	if (ipa->version >= IPA_VERSION_3_0 && ipa->version < IPA_VERSION_4_0)
 		return;
 
 	reg = ipa_reg(ipa, COMP_CFG);
@@ -283,18 +291,22 @@ static void ipa_hardware_config_comp(struct ipa *ipa)
 
 	val = ioread32(ipa->reg_virt + offset);
 
-	if (ipa->version == IPA_VERSION_4_0) {
-		val &= ~reg_bit(reg, IPA_QMB_SELECT_CONS_EN);
-		val &= ~reg_bit(reg, IPA_QMB_SELECT_PROD_EN);
-		val &= ~reg_bit(reg, IPA_QMB_SELECT_GLOBAL_EN);
-	} else if (ipa->version < IPA_VERSION_4_5) {
-		val |= reg_bit(reg, GSI_MULTI_AXI_MASTERS_DIS);
+	if (ipa->version <= IPA_VERSION_2_6L) {
+		val |= reg_bit(reg, COMP_CFG_ENABLE);
 	} else {
-		/* For IPA v4.5 FULL_FLUSH_WAIT_RS_CLOSURE_EN is 0 */
-	}
+		if (ipa->version == IPA_VERSION_4_0) {
+			val &= ~reg_bit(reg, IPA_QMB_SELECT_CONS_EN);
+			val &= ~reg_bit(reg, IPA_QMB_SELECT_PROD_EN);
+			val &= ~reg_bit(reg, IPA_QMB_SELECT_GLOBAL_EN);
+		} else if (ipa->version < IPA_VERSION_4_5) {
+			val |= reg_bit(reg, GSI_MULTI_AXI_MASTERS_DIS);
+		} else {
+			/* For IPA v4.5 FULL_FLUSH_WAIT_RS_CLOSURE_EN is 0 */
+		}
 
-	val |= reg_bit(reg, GSI_MULTI_INORDER_RD_DIS);
-	val |= reg_bit(reg, GSI_MULTI_INORDER_WR_DIS);
+		val |= reg_bit(reg, GSI_MULTI_INORDER_RD_DIS);
+		val |= reg_bit(reg, GSI_MULTI_INORDER_WR_DIS);
+	}
 
 	iowrite32(val, ipa->reg_virt + offset);
 }
@@ -307,6 +319,10 @@ ipa_hardware_config_qsb(struct ipa *ipa, const struct ipa_data *data)
 	const struct ipa_qsb_data *data1;
 	const struct reg *reg;
 	u32 val;
+
+	/* Nothing to configure on IPA v2.* */
+	if (ipa->version < IPA_VERSION_3_0)
+		return;
 
 	/* QMB 0 represents DDR; QMB 1 (if present) represents PCIe */
 	data0 = &data->qsb_data[IPA_QSB_MASTER_DDR];
@@ -524,7 +540,8 @@ static void ipa_hardware_config(struct ipa *ipa, const struct ipa_data *data)
 static void ipa_hardware_deconfig(struct ipa *ipa)
 {
 	/* Mostly we just leave things as we set them. */
-	ipa_hardware_dcd_deconfig(ipa);
+	if (ipa->version > IPA_VERSION_2_6L)
+		ipa_hardware_dcd_deconfig(ipa);
 }
 
 /**
@@ -904,7 +921,8 @@ static int ipa_probe(struct platform_device *pdev)
 
 	if (loader == IPA_LOADER_SELF) {
 		/* The AP is loading GSI firmware; do so now */
-		ret = ipa_firmware_load(dev);
+		if (ipa->version > IPA_VERSION_2_6L)
+			ret = ipa_firmware_load(dev);
 		if (ret)
 			goto err_deconfig;
 	} /* Otherwise loader == IPA_LOADER_SKIP */
