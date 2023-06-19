@@ -478,36 +478,36 @@ static const u32 reg_endp_router_cache_cfg_fmask[] = {
 REG_STRIDE_FIELDS(ENDP_ROUTER_CACHE_CFG, endp_router_cache_cfg,
 		  0x00001070, 0x0080);
 
-/* Valid bits defined by enum ipa_irq_id; only used for GSI_EE_AP */
-REG(IPA_IRQ_STTS, ipa_irq_stts, 0x0000c008 + 0x1000 * GSI_EE_AP);
+/* Valid bits defined by enum ipa_irq_id; only used for DMA_EE_AP */
+REG(IPA_IRQ_STTS, ipa_irq_stts, 0x0000c008 + 0x1000 * DMA_EE_AP);
 
-/* Valid bits defined by enum ipa_irq_id; only used for GSI_EE_AP */
-REG(IPA_IRQ_EN, ipa_irq_en, 0x0000c00c + 0x1000 * GSI_EE_AP);
+/* Valid bits defined by enum ipa_irq_id; only used for DMA_EE_AP */
+REG(IPA_IRQ_EN, ipa_irq_en, 0x0000c00c + 0x1000 * DMA_EE_AP);
 
-/* Valid bits defined by enum ipa_irq_id; only used for GSI_EE_AP */
-REG(IPA_IRQ_CLR, ipa_irq_clr, 0x0000c010 + 0x1000 * GSI_EE_AP);
+/* Valid bits defined by enum ipa_irq_id; only used for DMA_EE_AP */
+REG(IPA_IRQ_CLR, ipa_irq_clr, 0x0000c010 + 0x1000 * DMA_EE_AP);
 
 static const u32 reg_ipa_irq_uc_fmask[] = {
 	[UC_INTR]					= BIT(0),
 						/* Bits 1-31 reserved */
 };
 
-REG_FIELDS(IPA_IRQ_UC, ipa_irq_uc, 0x0000c01c + 0x1000 * GSI_EE_AP);
+REG_FIELDS(IPA_IRQ_UC, ipa_irq_uc, 0x0000c01c + 0x1000 * DMA_EE_AP);
 
 /* Valid bits defined by ipa->available */
 
 REG_STRIDE(IRQ_SUSPEND_INFO, irq_suspend_info,
-	   0x0000c030 + 0x1000 * GSI_EE_AP, 0x0004);
+	   0x0000c030 + 0x1000 * DMA_EE_AP, 0x0004);
 
 /* Valid bits defined by ipa->available */
 
 REG_STRIDE(IRQ_SUSPEND_EN, irq_suspend_en,
-	   0x0000c050 + 0x1000 * GSI_EE_AP, 0x0004);
+	   0x0000c050 + 0x1000 * DMA_EE_AP, 0x0004);
 
 /* Valid bits defined by ipa->available */
 
 REG_STRIDE(IRQ_SUSPEND_CLR, irq_suspend_clr,
-	   0x0000c070 + 0x1000 * GSI_EE_AP, 0x0004);
+	   0x0000c070 + 0x1000 * DMA_EE_AP, 0x0004);
 
 static const struct reg *reg_array[] = {
 	[COMP_CFG]			= &reg_comp_cfg,

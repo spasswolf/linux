@@ -725,7 +725,7 @@ static void gsi_evt_ring_program(struct gsi *gsi, u32 evt_ring_id)
 	reg = gsi_reg(gsi, EV_CH_E_CNTXT_0);
 	/* We program all event rings as GPI type/protocol */
 	val = reg_encode(reg, EV_CHTYPE, GSI_CHANNEL_TYPE_GPI);
-	/* EV_EE field is 0 (GSI_EE_AP) */
+	/* EV_EE field is 0 (DMA_EE_AP) */
 	val |= reg_bit(reg, EV_INTYPE);
 	val |= reg_encode(reg, EV_ELEMENT_SIZE, GSI_RING_ELEMENT_SIZE);
 	iowrite32(val, gsi->virt + reg_n_offset(reg, evt_ring_id));
@@ -1799,7 +1799,7 @@ static int gsi_generic_command(struct gsi *gsi, u32 channel_id,
 	reg = gsi_reg(gsi, GENERIC_CMD);
 	val = reg_encode(reg, GENERIC_OPCODE, opcode);
 	val |= reg_encode(reg, GENERIC_CHID, channel_id);
-	val |= reg_encode(reg, GENERIC_EE, GSI_EE_MODEM);
+	val |= reg_encode(reg, GENERIC_EE, DMA_EE_MODEM);
 	if (gsi->version >= IPA_VERSION_4_11)
 		val |= reg_encode(reg, GENERIC_PARAMS, params);
 
@@ -2162,7 +2162,7 @@ static bool gsi_channel_data_valid(struct gsi *gsi, bool command,
 		return false;
 	}
 
-	if (data->ee_id != GSI_EE_AP && data->ee_id != GSI_EE_MODEM) {
+	if (data->ee_id != DMA_EE_AP && data->ee_id != DMA_EE_MODEM) {
 		dev_err(dev, "bad EE id %u; not AP or modem\n", data->ee_id);
 		return false;
 	}
@@ -2315,7 +2315,7 @@ static int gsi_channel_init(struct gsi *gsi, u32 count,
 			continue;	/* Skip over empty slots */
 
 		/* Mark modem channels to be allocated (hardware workaround) */
-		if (data[i].ee_id == GSI_EE_MODEM) {
+		if (data[i].ee_id == DMA_EE_MODEM) {
 			if (modem_alloc)
 				gsi->modem_channel_bitmap |=
 						BIT(data[i].channel_id);
@@ -2333,7 +2333,7 @@ err_unwind:
 	while (i--) {
 		if (ipa_gsi_endpoint_data_empty(&data[i]))
 			continue;
-		if (modem_alloc && data[i].ee_id == GSI_EE_MODEM) {
+		if (modem_alloc && data[i].ee_id == DMA_EE_MODEM) {
 			gsi->modem_channel_bitmap &= ~BIT(data[i].channel_id);
 			continue;
 		}
