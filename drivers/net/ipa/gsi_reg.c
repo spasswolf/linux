@@ -5,23 +5,23 @@
 #include <linux/platform_device.h>
 #include <linux/io.h>
 
-#include "gsi.h"
+#include "ipa_dma.h"
 #include "reg.h"
 #include "gsi_reg.h"
 
 /* Is this register ID valid for the current GSI version? */
-static bool gsi_reg_id_valid(struct gsi *gsi, enum gsi_reg_id reg_id)
+static bool gsi_reg_id_valid(struct ipa_dma *ipa_dma, enum gsi_reg_id reg_id)
 {
 	switch (reg_id) {
 	case INTER_EE_SRC_CH_IRQ_MSK:
 	case INTER_EE_SRC_EV_CH_IRQ_MSK:
-		return gsi->version >= IPA_VERSION_3_5;
+		return ipa_dma->version >= IPA_VERSION_3_5;
 
 	case HW_PARAM_2:
-		return gsi->version >= IPA_VERSION_3_5_1;
+		return ipa_dma->version >= IPA_VERSION_3_5_1;
 
 	case HW_PARAM_4:
-		return gsi->version >= IPA_VERSION_5_0;
+		return ipa_dma->version >= IPA_VERSION_5_0;
 
 	case CH_C_CNTXT_0:
 	case CH_C_CNTXT_1:
@@ -79,17 +79,17 @@ static bool gsi_reg_id_valid(struct gsi *gsi, enum gsi_reg_id reg_id)
 	}
 }
 
-const struct reg *gsi_reg(struct gsi *gsi, enum gsi_reg_id reg_id)
+const struct reg *gsi_reg(struct ipa_dma *ipa_dma, enum gsi_reg_id reg_id)
 {
-	if (WARN(!gsi_reg_id_valid(gsi, reg_id), "invalid reg %u\n", reg_id))
+	if (WARN(!gsi_reg_id_valid(ipa_dma, reg_id), "invalid reg %u\n", reg_id))
 		return NULL;
 
-	return reg(gsi->regs, reg_id);
+	return reg(ipa_dma->regs, reg_id);
 }
 
-static const struct regs *gsi_regs(struct gsi *gsi)
+static const struct regs *gsi_regs(struct ipa_dma *ipa_dma)
 {
-	switch (gsi->version) {
+	switch (ipa_dma->version) {
 	case IPA_VERSION_3_1:
 		return &gsi_regs_v3_1;
 
@@ -118,7 +118,7 @@ static const struct regs *gsi_regs(struct gsi *gsi)
 }
 
 /* Sets gsi->virt and I/O maps the "gsi" memory range for registers */
-int gsi_reg_init(struct gsi *gsi, struct platform_device *pdev)
+int gsi_reg_init(struct ipa_dma *ipa_dma, struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct resource *res;
@@ -137,14 +137,14 @@ int gsi_reg_init(struct gsi *gsi, struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	gsi->regs = gsi_regs(gsi);
-	if (!gsi->regs) {
-		dev_err(dev, "unsupported IPA version %u (?)\n", gsi->version);
+	ipa_dma->regs = gsi_regs(ipa_dma);
+	if (!ipa_dma->regs) {
+		dev_err(dev, "unsupported IPA version %u (?)\n", ipa_dma->version);
 		return -EINVAL;
 	}
 
-	gsi->virt = ioremap(res->start, size);
-	if (!gsi->virt) {
+	ipa_dma->virt = ioremap(res->start, size);
+	if (!ipa_dma->virt) {
 		dev_err(dev, "unable to remap \"gsi\" memory\n");
 		return -ENOMEM;
 	}
@@ -153,9 +153,9 @@ int gsi_reg_init(struct gsi *gsi, struct platform_device *pdev)
 }
 
 /* Inverse of gsi_reg_init() */
-void gsi_reg_exit(struct gsi *gsi)
+void gsi_reg_exit(struct ipa_dma *ipa_dma)
 {
-	iounmap(gsi->virt);
-	gsi->virt = NULL;
-	gsi->regs = NULL;
+	iounmap(ipa_dma->virt);
+	ipa_dma->virt = NULL;
+	ipa_dma->regs = NULL;
 }

@@ -68,7 +68,7 @@ struct ipa_qsb_data {
 };
 
 /**
- * struct gsi_channel_data - GSI channel configuration data
+ * struct ipa_dma_channel_data - GSI channel configuration data
  * @tre_count:		number of TREs in the channel ring
  * @event_count:	number of slots in the associated event ring
  * @tlv_count:		number of entries in channel's TLV FIFO
@@ -89,7 +89,7 @@ struct ipa_qsb_data {
  * elements, and the size of this FIFO limits the number of TREs
  * that can be included in a single transaction.
  */
-struct gsi_channel_data {
+struct ipa_dma_channel_data {
 	u16 tre_count;			/* must be a power of 2 */
 	u16 event_count;		/* must be a power of 2 */
 	u8 tlv_count;
@@ -115,7 +115,7 @@ struct ipa_endpoint_data {
 };
 
 /**
- * struct ipa_gsi_endpoint_data - GSI channel/IPA endpoint data
+ * struct ipa_dma_endpoint_data - GSI channel/IPA endpoint data
  * @ee_id:	GSI execution environment ID
  * @channel_id:	GSI channel ID
  * @endpoint_id: IPA endpoint ID
@@ -123,13 +123,13 @@ struct ipa_endpoint_data {
  * @channel:	GSI channel configuration data (see above)
  * @endpoint:	IPA endpoint configuration data (see above)
  */
-struct ipa_gsi_endpoint_data {
+struct ipa_dma_endpoint_data {
 	u8 ee_id;		/* enum dma_ee_id */
 	u8 channel_id;
 	u8 endpoint_id;
 	bool toward_ipa;
 
-	struct gsi_channel_data channel;
+	struct ipa_dma_channel_data channel;
 	struct ipa_endpoint_data endpoint;
 };
 
@@ -236,7 +236,7 @@ struct ipa_data {
 	const struct ipa_qsb_data *qsb_data;
 	u32 modem_route_count;
 	u32 endpoint_count;	/* number of entries in endpoint_data[] */
-	const struct ipa_gsi_endpoint_data *endpoint_data;
+	const struct ipa_dma_endpoint_data *endpoint_data;
 	const struct ipa_resource_data *resource_data;
 	const struct ipa_mem_data *mem_data;
 	const struct ipa_power_data *power_data;
