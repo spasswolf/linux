@@ -51,5 +51,5 @@ void ipa_gsi_channel_tx_completed(struct gsi *gsi, u32 channel_id, u32 count,
 /* Indicate whether an endpoint config data entry is "empty" */
 bool ipa_gsi_endpoint_data_empty(const struct ipa_gsi_endpoint_data *data)
 {
-	return data->ee_id == GSI_EE_AP && !data->channel.tlv_count;
+	return data->ee_id == DMA_EE_AP && !data->channel.tlv_count;
 }

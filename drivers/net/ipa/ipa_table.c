@@ -232,7 +232,7 @@ ipa_filter_reset_table(struct ipa *ipa, bool hashed, bool ipv6, bool modem)
 {
 	u64 ep_mask = ipa->filtered;
 	struct gsi_trans *trans;
-	enum gsi_ee_id ee_id;
+	enum dma_ee_id ee_id;
 
 	trans = ipa_cmd_trans_alloc(ipa, hweight64(ep_mask));
 	if (!trans) {
@@ -242,7 +242,7 @@ ipa_filter_reset_table(struct ipa *ipa, bool hashed, bool ipv6, bool modem)
 		return -EBUSY;
 	}
 
-	ee_id = modem ? GSI_EE_MODEM : GSI_EE_AP;
+	ee_id = modem ? DMA_EE_MODEM : DMA_EE_AP;
 	while (ep_mask) {
 		u32 endpoint_id = __ffs(ep_mask);
 		struct ipa_endpoint *endpoint;
@@ -519,7 +519,7 @@ static void ipa_filter_tuple_zero(struct ipa_endpoint *endpoint)
 /* Configure a hashed filter table; there is no ipa_filter_deconfig() */
 static void ipa_filter_config(struct ipa *ipa, bool modem)
 {
-	enum gsi_ee_id ee_id = modem ? GSI_EE_MODEM : GSI_EE_AP;
+	enum dma_ee_id ee_id = modem ? DMA_EE_MODEM : DMA_EE_AP;
 	u64 ep_mask = ipa->filtered;
 
 	if (!ipa_table_hash_support(ipa))
