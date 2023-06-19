@@ -123,6 +123,16 @@
 	status = "okay";
 };
 
+&mpss {
+	status = "okay";
+	compatible = "qcom,msm8953-alt-mss-pil";
+
+	power-domains = <&rpmpd MSM8953_VDDCX>, <&rpmpd MSM8953_VDDMX>, <&rpmpd MSM8953_VDDMD>;
+	power-domain-names = "cx", "mx", "mss";
+
+	pll-supply = <&pm8953_l7>;
+};
+
 &mdss {
 	status = "okay";
 };
