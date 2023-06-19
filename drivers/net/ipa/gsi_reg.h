@@ -31,7 +31,7 @@ struct gsi;
  *
  * The offset of a register dependent on execution environment is computed
  * by a macro that is supplied a parameter "ee".  The "ee" value is a member
- * of the gsi_ee_id enumerated type.
+ * of the dma_ee_id enumerated type.
  *
  * The offset of a channel register is computed by a macro that is supplied a
  * parameter "ch".  The "ch" value is a channel id whose maximum value is 30
@@ -155,7 +155,7 @@ enum gsi_prefetch_mode {
 /* EV_CH_E_CNTXT_0 register */
 enum gsi_reg_ch_c_ev_ch_e_cntxt_0_field_id {
 	EV_CHTYPE,	/* enum gsi_channel_type */
-	EV_EE,		/* enum gsi_ee_id; always GSI_EE_AP for us */
+	EV_EE,		/* enum dma_ee_id; always DMA_EE_AP for us */
 	EV_EVCHID,
 	EV_INTYPE,
 	EV_CHSTATE,
