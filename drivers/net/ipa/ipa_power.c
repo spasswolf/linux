@@ -144,12 +144,13 @@ static void ipa_power_disable(struct ipa *ipa)
 static int ipa_runtime_suspend(struct device *dev)
 {
 	struct ipa *ipa = dev_get_drvdata(dev);
+	struct ipa_dma *ipa_dma = &ipa->ipa_dma;
 
 	/* Endpoints aren't usable until setup is complete */
 	if (ipa->setup_complete) {
 		__clear_bit(IPA_POWER_FLAG_RESUMED, ipa->power->flags);
 		ipa_endpoint_suspend(ipa);
-		ipa->gsi.ops->suspend(&ipa->gsi);
+		ipa_dma->ops->suspend(ipa_dma);
 	}
 
 	ipa_power_disable(ipa);
@@ -160,6 +161,7 @@ static int ipa_runtime_suspend(struct device *dev)
 static int ipa_runtime_resume(struct device *dev)
 {
 	struct ipa *ipa = dev_get_drvdata(dev);
+	struct ipa_dma *ipa_dma = &ipa->ipa_dma;
 	int ret;
 
 	ret = ipa_power_enable(ipa);
@@ -168,7 +170,7 @@ static int ipa_runtime_resume(struct device *dev)
 
 	/* Endpoints aren't usable until setup is complete */
 	if (ipa->setup_complete) {
-		ipa->gsi.ops->resume(&ipa->gsi);
+		ipa_dma->ops->resume(ipa_dma);
 		ipa_endpoint_resume(ipa);
 	}
 

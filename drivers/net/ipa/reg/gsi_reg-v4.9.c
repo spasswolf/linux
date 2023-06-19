@@ -4,7 +4,7 @@
 
 #include <linux/types.h>
 
-#include "../gsi.h"
+#include "../ipa_dma.h"
 #include "../reg.h"
 #include "../gsi_reg.h"
 
