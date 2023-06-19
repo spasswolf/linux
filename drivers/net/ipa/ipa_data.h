@@ -124,7 +124,7 @@ struct ipa_endpoint_data {
  * @endpoint:	IPA endpoint configuration data (see above)
  */
 struct ipa_gsi_endpoint_data {
-	u8 ee_id;		/* enum gsi_ee_id */
+	u8 ee_id;		/* enum dma_ee_id */
 	u8 channel_id;
 	u8 endpoint_id;
 	bool toward_ipa;

@@ -56,7 +56,7 @@ static const struct ipa_qsb_data ipa_qsb_data[] = {
 /* Endpoint datdata for an SoC having IPA v3.5.1 */
 static const struct ipa_gsi_endpoint_data ipa_gsi_endpoint_data[] = {
 	[IPA_ENDPOINT_AP_COMMAND_TX] = {
-		.ee_id		= GSI_EE_AP,
+		.ee_id		= DMA_EE_AP,
 		.channel_id	= 4,
 		.endpoint_id	= 5,
 		.toward_ipa	= true,
@@ -77,7 +77,7 @@ static const struct ipa_gsi_endpoint_data ipa_gsi_endpoint_data[] = {
 		},
 	},
 	[IPA_ENDPOINT_AP_LAN_RX] = {
-		.ee_id		= GSI_EE_AP,
+		.ee_id		= DMA_EE_AP,
 		.channel_id	= 5,
 		.endpoint_id	= 9,
 		.toward_ipa	= false,
@@ -100,7 +100,7 @@ static const struct ipa_gsi_endpoint_data ipa_gsi_endpoint_data[] = {
 		},
 	},
 	[IPA_ENDPOINT_AP_MODEM_TX] = {
-		.ee_id		= GSI_EE_AP,
+		.ee_id		= DMA_EE_AP,
 		.channel_id	= 3,
 		.endpoint_id	= 2,
 		.toward_ipa	= true,
@@ -126,7 +126,7 @@ static const struct ipa_gsi_endpoint_data ipa_gsi_endpoint_data[] = {
 		},
 	},
 	[IPA_ENDPOINT_AP_MODEM_RX] = {
-		.ee_id		= GSI_EE_AP,
+		.ee_id		= DMA_EE_AP,
 		.channel_id	= 6,
 		.endpoint_id	= 10,
 		.toward_ipa	= false,
@@ -150,7 +150,7 @@ static const struct ipa_gsi_endpoint_data ipa_gsi_endpoint_data[] = {
 		},
 	},
 	[IPA_ENDPOINT_MODEM_LAN_TX] = {
-		.ee_id		= GSI_EE_MODEM,
+		.ee_id		= DMA_EE_MODEM,
 		.channel_id	= 0,
 		.endpoint_id	= 3,
 		.toward_ipa	= true,
@@ -159,7 +159,7 @@ static const struct ipa_gsi_endpoint_data ipa_gsi_endpoint_data[] = {
 		},
 	},
 	[IPA_ENDPOINT_MODEM_AP_TX] = {
-		.ee_id		= GSI_EE_MODEM,
+		.ee_id		= DMA_EE_MODEM,
 		.channel_id	= 4,
 		.endpoint_id	= 6,
 		.toward_ipa	= true,
@@ -168,7 +168,7 @@ static const struct ipa_gsi_endpoint_data ipa_gsi_endpoint_data[] = {
 		},
 	},
 	[IPA_ENDPOINT_MODEM_AP_RX] = {
-		.ee_id		= GSI_EE_MODEM,
+		.ee_id		= DMA_EE_MODEM,
 		.channel_id	= 2,
 		.endpoint_id	= 12,
 		.toward_ipa	= false,
