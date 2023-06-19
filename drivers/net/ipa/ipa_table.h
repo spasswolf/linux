@@ -25,7 +25,7 @@ bool ipa_filtered_valid(struct ipa *ipa, u64 filtered);
  */
 static inline bool ipa_table_hash_support(struct ipa *ipa)
 {
-	return ipa->version != IPA_VERSION_4_2;
+	return ipa->version != IPA_VERSION_4_2 && ipa->version > IPA_VERSION_2_6L;
 }
 
 /**
