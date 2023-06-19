@@ -111,12 +111,13 @@ enum ipa_firmware_loader {
  */
 int ipa_setup(struct ipa *ipa)
 {
+	struct ipa_dma *ipa_dma = &ipa->ipa_dma;
 	struct ipa_endpoint *exception_endpoint;
 	struct ipa_endpoint *command_endpoint;
 	struct device *dev = &ipa->pdev->dev;
 	int ret;
 
-	ret = ipa->gsi.ops->setup(&ipa->gsi);
+	ret = ipa_dma->ops->setup(ipa_dma);
 	if (ret)
 		return ret;
 
@@ -172,7 +173,7 @@ err_endpoint_teardown:
 	ipa_endpoint_teardown(ipa);
 	ipa_power_teardown(ipa);
 err_gsi_teardown:
-	ipa->gsi.ops->teardown(&ipa->gsi);
+	ipa_dma->ops->teardown(ipa_dma);
 
 	return ret;
 }
@@ -183,6 +184,7 @@ err_gsi_teardown:
  */
 static void ipa_teardown(struct ipa *ipa)
 {
+	struct ipa_dma *ipa_dma = &ipa->ipa_dma;
 	struct ipa_endpoint *exception_endpoint;
 	struct ipa_endpoint *command_endpoint;
 
@@ -197,7 +199,7 @@ static void ipa_teardown(struct ipa *ipa)
 	ipa_endpoint_disable_one(command_endpoint);
 	ipa_endpoint_teardown(ipa);
 	ipa_power_teardown(ipa);
-	ipa->gsi.ops->teardown(&ipa->gsi);
+	ipa_dma->ops->teardown(ipa_dma);
 }
 
 static void
@@ -712,11 +714,11 @@ static void ipa_validate_build(void)
 
 	/* There's no point if we have no channels or event rings */
 	BUILD_BUG_ON(!GSI_CHANNEL_COUNT_MAX);
-	BUILD_BUG_ON(!GSI_EVT_RING_COUNT_MAX);
+	BUILD_BUG_ON(!IPA_DMA_EVT_RING_COUNT_MAX);
 
 	/* GSI hardware design limits */
 	BUILD_BUG_ON(GSI_CHANNEL_COUNT_MAX > 32);
-	BUILD_BUG_ON(GSI_EVT_RING_COUNT_MAX > 31);
+	BUILD_BUG_ON(IPA_DMA_EVT_RING_COUNT_MAX > 31);
 
 	/* The number of TREs in a transaction is limited by the channel's
 	 * TLV FIFO size.  A transaction structure uses 8-bit fields
@@ -862,9 +864,9 @@ static int ipa_probe(struct platform_device *pdev)
 		goto err_reg_exit;
 
 	/* GSI is the only supported DMA backend at the moment. */
-	ipa->gsi.ops = &gsi_ops;
+	ipa->ipa_dma.ops = &gsi_ops;
 
-	ret = ipa->gsi.ops->init(&ipa->gsi, pdev, ipa->version,
+	ret = ipa->ipa_dma.ops->init(&ipa->ipa_dma, pdev, ipa->version,
 				  data->endpoint_count, data->endpoint_data);
 	if (ret)
 		goto err_mem_exit;
@@ -926,7 +928,7 @@ err_table_exit:
 err_endpoint_exit:
 	ipa_endpoint_exit(ipa);
 err_gsi_exit:
-	ipa->gsi.ops->exit(&ipa->gsi);
+	ipa->ipa_dma.ops->exit(&ipa->ipa_dma);
 err_mem_exit:
 	ipa_mem_exit(ipa);
 err_reg_exit:
@@ -942,6 +944,7 @@ err_power_exit:
 static int ipa_remove(struct platform_device *pdev)
 {
 	struct ipa *ipa = dev_get_drvdata(&pdev->dev);
+	struct ipa_dma *ipa_dma = &ipa->ipa_dma;
 	struct ipa_power *power = ipa->power;
 	struct device *dev = &pdev->dev;
 	int ret;
@@ -974,7 +977,7 @@ out_power_put:
 	ipa_smp2p_exit(ipa);
 	ipa_table_exit(ipa);
 	ipa_endpoint_exit(ipa);
-	ipa->gsi.ops->exit(&ipa->gsi);
+	ipa_dma->ops->exit(ipa_dma);
 	ipa_mem_exit(ipa);
 	ipa_reg_exit(ipa);
 	kfree(ipa);
