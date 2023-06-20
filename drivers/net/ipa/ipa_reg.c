@@ -15,20 +15,42 @@ static bool ipa_reg_id_valid(struct ipa *ipa, enum ipa_reg_id reg_id)
 	enum ipa_version version = ipa->version;
 
 	switch (reg_id) {
+	case COMP_SW_RESET:
+		return version < IPA_VERSION_3_0;
+
 	case FILT_ROUT_HASH_EN:
-		return version == IPA_VERSION_4_2;
+		return version >= IPA_VERSION_3_0 && version < IPA_VERSION_5_0;
 
 	case FILT_ROUT_HASH_FLUSH:
-		return version < IPA_VERSION_5_0 && version != IPA_VERSION_4_2;
+		return version > IPA_VERSION_3_0 && version < IPA_VERSION_5_0;
 
 	case FILT_ROUT_CACHE_FLUSH:
 	case ENDP_FILTER_CACHE_CFG:
 	case ENDP_ROUTER_CACHE_CFG:
 		return version >= IPA_VERSION_5_0;
 
+	case QSB_MAX_WRITES:
+	case QSB_MAX_READS:
+	case STATE_AGGR_ACTIVE:
+	case AGGR_FORCE_CLOSE:
+	case SRC_RSRC_GRP_01_RSRC_TYPE:
+	case SRC_RSRC_GRP_23_RSRC_TYPE:
+	case DST_RSRC_GRP_01_RSRC_TYPE:
+	case DST_RSRC_GRP_23_RSRC_TYPE:
+	case ENDP_INIT_RSRC_GRP:
+	case ENDP_INIT_SEQ:
+	case IPA_IRQ_UC:
+		return version >= IPA_VERSION_3_0;
+
 	case IPA_BCR:
 	case COUNTER_CFG:
-		return version < IPA_VERSION_4_5;
+		return version >= IPA_VERSION_2_5 && version < IPA_VERSION_4_5;
+
+	case ENABLED_PIPES:
+		return version == IPA_VERSION_2_6L;
+
+	case LOCAL_PKT_PROC_CNTXT:
+		return version == IPA_VERSION_2_5 || version >= IPA_VERSION_3_0;
 
 	case IPA_TX_CFG:
 	case FLAVOR_0:
@@ -42,7 +64,7 @@ static bool ipa_reg_id_valid(struct ipa *ipa, enum ipa_reg_id reg_id)
 
 	case SRC_RSRC_GRP_45_RSRC_TYPE:
 	case DST_RSRC_GRP_45_RSRC_TYPE:
-		return version <= IPA_VERSION_3_1 ||
+		return version == IPA_VERSION_3_1 ||
 		       version == IPA_VERSION_4_5 ||
 		       version == IPA_VERSION_5_0;
 
@@ -59,20 +81,13 @@ static bool ipa_reg_id_valid(struct ipa *ipa, enum ipa_reg_id reg_id)
 	case IRQ_SUSPEND_CLR:
 		return version >= IPA_VERSION_3_1;
 
+	case ENDP_INIT_CTRL:
+		return version <= IPA_VERSION_3_5_1;
+
 	case COMP_CFG:
 	case CLKON_CFG:
 	case ROUTE:
 	case SHARED_MEM_SIZE:
-	case QSB_MAX_WRITES:
-	case QSB_MAX_READS:
-	case STATE_AGGR_ACTIVE:
-	case LOCAL_PKT_PROC_CNTXT:
-	case AGGR_FORCE_CLOSE:
-	case SRC_RSRC_GRP_01_RSRC_TYPE:
-	case SRC_RSRC_GRP_23_RSRC_TYPE:
-	case DST_RSRC_GRP_01_RSRC_TYPE:
-	case DST_RSRC_GRP_23_RSRC_TYPE:
-	case ENDP_INIT_CTRL:
 	case ENDP_INIT_CFG:
 	case ENDP_INIT_NAT:
 	case ENDP_INIT_HDR:
@@ -83,13 +98,10 @@ static bool ipa_reg_id_valid(struct ipa *ipa, enum ipa_reg_id reg_id)
 	case ENDP_INIT_HOL_BLOCK_EN:
 	case ENDP_INIT_HOL_BLOCK_TIMER:
 	case ENDP_INIT_DEAGGR:
-	case ENDP_INIT_RSRC_GRP:
-	case ENDP_INIT_SEQ:
 	case ENDP_STATUS:
 	case IPA_IRQ_STTS:
 	case IPA_IRQ_EN:
 	case IPA_IRQ_CLR:
-	case IPA_IRQ_UC:
 	case IRQ_SUSPEND_INFO:
 		return true;	/* These should be defined for all versions */
 
