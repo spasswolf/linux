@@ -140,33 +140,40 @@ static bool ipa_mem_id_valid(struct ipa *ipa, enum ipa_mem_id mem_id)
 	switch (mem_id) {
 	case IPA_MEM_UC_SHARED:
 	case IPA_MEM_UC_INFO:
-	case IPA_MEM_V4_FILTER_HASHED:
 	case IPA_MEM_V4_FILTER:
-	case IPA_MEM_V6_FILTER_HASHED:
 	case IPA_MEM_V6_FILTER:
-	case IPA_MEM_V4_ROUTE_HASHED:
 	case IPA_MEM_V4_ROUTE:
-	case IPA_MEM_V6_ROUTE_HASHED:
 	case IPA_MEM_V6_ROUTE:
 	case IPA_MEM_MODEM_HEADER:
-	case IPA_MEM_AP_HEADER:
 	case IPA_MEM_MODEM:
-	case IPA_MEM_UC_EVENT_RING:
-	case IPA_MEM_PDN_CONFIG:
-	case IPA_MEM_STATS_QUOTA_MODEM:
-	case IPA_MEM_STATS_QUOTA_AP:
 	case IPA_MEM_END_MARKER:	/* pseudo region */
 		break;
 
 	case IPA_MEM_MODEM_PROC_CTX:
 	case IPA_MEM_AP_PROC_CTX:
-		if (version == IPA_VERSION_2_6L)
+		if (version == IPA_VERSION_2_6L ||
+		    version == IPA_VERSION_2_0)
+			return false;
+		break;
+
+	case IPA_MEM_V4_FILTER_HASHED:
+	case IPA_MEM_V6_FILTER_HASHED:
+	case IPA_MEM_V4_ROUTE_HASHED:
+	case IPA_MEM_V6_ROUTE_HASHED:
+		if (version < IPA_VERSION_3_0)
 			return false;
 		break;
 
 	case IPA_MEM_ZIP:
-		if (version == IPA_VERSION_2_6L)
-			return true;
+		if (version != IPA_VERSION_2_6L)
+			return false;
+		break;
+
+	case IPA_MEM_UC_EVENT_RING:
+		if (version != IPA_VERSION_3_5_1 ||
+		    version != IPA_VERSION_4_5 ||
+		    version != IPA_VERSION_4_9)
+			return false;
 		break;
 
 	case IPA_MEM_STATS_TETHERING:
@@ -180,6 +187,23 @@ static bool ipa_mem_id_valid(struct ipa *ipa, enum ipa_mem_id mem_id)
 	case IPA_MEM_STATS_V4_ROUTE:
 	case IPA_MEM_STATS_V6_ROUTE:
 		if (version < IPA_VERSION_4_0 || version > IPA_VERSION_4_2)
+			return false;
+		break;
+
+	case IPA_MEM_PDN_CONFIG:
+	case IPA_MEM_STATS_QUOTA_MODEM:
+		if (version < IPA_VERSION_4_2 || version > IPA_VERSION_4_11)
+			return false;
+		break;
+	
+	case IPA_MEM_AP_HEADER:
+		if (version != IPA_VERSION_2_0 && 
+		    (version < IPA_VERSION_4_5 || version > IPA_VERSION_4_11))
+			return false;
+		break;
+
+	case IPA_MEM_STATS_QUOTA_AP:
+		if (version < IPA_VERSION_4_5 || version > IPA_VERSION_4_11)
 			return false;
 		break;
 
@@ -671,6 +695,8 @@ int ipa_mem_init(struct ipa *ipa, const struct ipa_mem_data *mem_data)
 	/* Check the route and filter table memory regions */
 	if (!ipa_table_mem_valid(ipa, false))
 		return -EINVAL;
+
+
 	if (!ipa_table_mem_valid(ipa, true))
 		return -EINVAL;
 
