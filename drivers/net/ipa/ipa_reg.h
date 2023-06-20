@@ -55,7 +55,7 @@ struct ipa;
 /* enum ipa_reg_id - IPA register IDs */
 enum ipa_reg_id {
 	COMP_CFG,
-	COMP_SW_RESET,
+	COMP_SW_RESET,					/* IPA v2.0 */
 	CLKON_CFG,
 	ROUTE,
 	SHARED_MEM_SIZE,
