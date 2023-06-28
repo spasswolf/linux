@@ -18,6 +18,7 @@
 #define FLASH_TYPE_VAL			0x18
 
 #define FLASH_SUBTYPE_REG		0x05
+#define FLASH_SUBTYPE_2CH_PMI632_VAL	0x05
 #define FLASH_SUBTYPE_3CH_PM8150_VAL	0x04
 #define FLASH_SUBTYPE_3CH_PMI8998_VAL	0x03
 #define FLASH_SUBTYPE_4CH_VAL		0x07
@@ -74,6 +75,7 @@
 #define UA_PER_MA			1000
 
 enum hw_type {
+	QCOM_MVFLASH_2CH,
 	QCOM_MVFLASH_3CH,
 	QCOM_MVFLASH_4CH,
 };
@@ -198,7 +200,7 @@ static int set_flash_current(struct qcom_flash_led *led, u32 current_ma, enum le
 		if (rc)
 			return rc;
 
-		if (flash_data->hw_type == QCOM_MVFLASH_3CH) {
+		if (flash_data->hw_type <= QCOM_MVFLASH_3CH) {
 			shift = chan_id * 2;
 			ires_mask |= FLASH_IRES_MASK_3CH << shift;
 			ires_val |= ((mode == FLASH_MODE) ?
@@ -363,7 +365,7 @@ static int qcom_flash_fault_get(struct led_classdev_flash *fled_cdev, u32 *fault
 	if (rc)
 		return rc;
 
-	if (flash_data->hw_type == QCOM_MVFLASH_3CH) {
+	if (flash_data->hw_type <= QCOM_MVFLASH_3CH) {
 		ot_mask = FLASH_STS_3CH_OTST1 |
 			  FLASH_STS_3CH_OTST2 |
 			  FLASH_STS_3CH_OTST3 |
@@ -391,11 +393,13 @@ static int qcom_flash_fault_get(struct led_classdev_flash *fled_cdev, u32 *fault
 	if (val & uv_mask)
 		fault_sts |= LED_FAULT_INPUT_VOLTAGE;
 
-	rc = regmap_field_read(flash_data->r_fields[REG_STATUS3], &val);
-	if (rc)
-		return rc;
+	if (flash_data->hw_type >= QCOM_MVFLASH_3CH) {
+		rc = regmap_field_read(flash_data->r_fields[REG_STATUS3], &val);
+		if (rc)
+			return rc;
+	}
 
-	if (flash_data->hw_type == QCOM_MVFLASH_3CH) {
+	if (flash_data->hw_type <= QCOM_MVFLASH_3CH) {
 		if (val & chan_mask)
 			fault_sts |= LED_FAULT_TIMEOUT;
 	} else if (flash_data->hw_type == QCOM_MVFLASH_4CH) {
@@ -695,7 +699,12 @@ static int qcom_flash_led_probe(struct platform_device *pdev)
 		return rc;
 	}
 
-	if (val == FLASH_SUBTYPE_3CH_PM8150_VAL || val == FLASH_SUBTYPE_3CH_PMI8998_VAL) {
+	if (val == FLASH_SUBTYPE_2CH_PMI632_VAL) {
+		flash_data->hw_type = QCOM_MVFLASH_2CH;
+		flash_data->max_channels = 2;
+		regs = mvflash_3ch_regs;
+	} else if (val == FLASH_SUBTYPE_3CH_PM8150_VAL ||
+		 val == FLASH_SUBTYPE_3CH_PMI8998_VAL) {
 		flash_data->hw_type = QCOM_MVFLASH_3CH;
 		flash_data->max_channels = 3;
 		regs = mvflash_3ch_regs;
