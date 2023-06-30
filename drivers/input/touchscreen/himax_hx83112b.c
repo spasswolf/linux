@@ -238,7 +238,7 @@ static int himax_handle_input(struct himax_ts_data *ts)
 	error = regmap_raw_read(ts->regmap, HIMAX_REG_READ_EVENT, &event,
 				sizeof(event));
 	if (error) {
-		dev_err(&ts->client->dev, "Failed to read input event: %d\n",
+		dev_err_ratelimited(&ts->client->dev, "Failed to read input event: %d\n",
 			error);
 		return error;
 	}
