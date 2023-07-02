@@ -54,7 +54,7 @@
 
 	status = "okay";
 
-	panel@0 {
+	panel: panel@0 {
 		compatible = "fairphone,fp3-hx83112b";
 		reg = <0>;
 
@@ -105,6 +105,7 @@
 		reg = <0x48>;
 		interrupt-parent = <&tlmm>;
 		interrupts = <65 IRQ_TYPE_LEVEL_LOW>;
+		panel = <&panel>;
 		touchscreen-size-x = <1080>;
 		touchscreen-size-y = <2160>;
 		reset-gpios = <&tlmm 64 GPIO_ACTIVE_LOW>;

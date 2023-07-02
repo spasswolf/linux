@@ -23,6 +23,8 @@
 #include <linux/kernel.h>
 #include <linux/regmap.h>
 
+#include <drm/drm_panel.h>
+
 #define HIMAX_MAX_POINTS		10
 
 #define HIMAX_AHB_ADDR_BYTE_0			0x00
@@ -73,6 +75,13 @@ struct himax_ts_data {
 	struct i2c_client *client;
 	struct regmap *regmap;
 	struct touchscreen_properties props;
+	// TODO: Should these go somewhere else?
+	wait_queue_head_t	wait;		/* For waiting the interrupt */
+	struct mutex		reset_lock;
+	struct drm_panel_follower panel_follower;
+	struct work_struct	panel_follower_prepare_work;
+	bool			is_panel_follower;
+	bool			prepare_work_finished;
 };
 
 static const struct regmap_config himax_regmap_config = {
@@ -323,6 +332,79 @@ static irqreturn_t himax_irq_handler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static int himax_suspend(struct himax_ts_data *ts)
+{
+	disable_irq(ts->client->irq);
+	return 0;
+}
+
+static int himax_resume(struct himax_ts_data *ts)
+{
+	enable_irq(ts->client->irq);
+	return 0;
+}
+
+static void himax_panel_prepare_work(struct work_struct *work)
+{
+	struct himax_ts_data *ts = container_of(work, struct himax_ts_data,
+					    panel_follower_prepare_work);
+	int ret;
+
+
+	// TODO: Is ther a function for the himax panel that is analogous
+	// to i2c_hid_core_initial_power_up in i2c-hid-core.c?
+	ret = himax_resume(ts);
+
+	if (ret)
+		dev_warn(&ts->client->dev, "Power on failed: %d\n", ret);
+	else
+		WRITE_ONCE(ts->prepare_work_finished, true);
+
+	/*
+	 * The work APIs provide a number of memory ordering guarantees
+	 * including one that says that memory writes before schedule_work()
+	 * are always visible to the work function, but they don't appear to
+	 * guarantee that a write that happened in the work is visible after
+	 * cancel_work_sync(). We'll add a write memory barrier here to match
+	 * with i2c_hid_core_panel_unpreparing() to ensure that our write to
+	 * prepare_work_finished is visible there.
+	 */
+	smp_wmb();
+}
+
+static int himax_panel_prepared(struct drm_panel_follower *follower)
+{
+	struct himax_ts_data *ts = container_of(follower, struct himax_ts_data, panel_follower);
+
+	/*
+	 * Powering on a touchscreen can be a slow process. Queue the work to
+	 * the system workqueue so we don't block the panel's power up.
+	 */
+	WRITE_ONCE(ts->prepare_work_finished, false);
+	schedule_work(&ts->panel_follower_prepare_work);
+
+	return 0;
+}
+
+static int himax_panel_unpreparing(struct drm_panel_follower *follower)
+{
+	struct himax_ts_data *ts = container_of(follower, struct himax_ts_data, panel_follower);
+
+	cancel_work_sync(&ts->panel_follower_prepare_work);
+
+	/* Match with ihid_core_panel_prepare_work() */
+	smp_rmb();
+	if (!READ_ONCE(ts->prepare_work_finished))
+		return 0;
+
+	return himax_suspend(ts);
+}
+
+static const struct drm_panel_follower_funcs himax_panel_follower_funcs = {
+	.panel_prepared = himax_panel_prepared,
+	.panel_unpreparing = himax_panel_unpreparing,
+};
+
 static int himax_probe(struct i2c_client *client)
 {
 	int error;
@@ -341,6 +423,10 @@ static int himax_probe(struct i2c_client *client)
 	i2c_set_clientdata(client, ts);
 	ts->client = client;
 	ts->chip = i2c_get_match_data(client);
+
+	init_waitqueue_head(&ts->wait);
+	mutex_init(&ts->reset_lock);
+	INIT_WORK(&ts->panel_follower_prepare_work, himax_panel_prepare_work);
 
 	ts->regmap = devm_regmap_init_i2c(client, &himax_regmap_config);
 	error = PTR_ERR_OR_ZERO(ts->regmap);
@@ -368,32 +454,54 @@ static int himax_probe(struct i2c_client *client)
 	if (error)
 		return error;
 
+	device_enable_async_suspend(&client->dev);
+
 	error = devm_request_threaded_irq(dev, client->irq, NULL,
-					  himax_irq_handler, IRQF_ONESHOT,
+					  himax_irq_handler, IRQF_ONESHOT | IRQF_NO_AUTOEN,
 					  client->name, ts);
 	if (error)
 		return error;
 
+	ts->panel_follower.funcs = &himax_panel_follower_funcs;
+	error = drm_panel_add_follower(&client->dev, &ts->panel_follower);
+	if(!error) {
+		printk(KERN_INFO "%s: panel is a follower\n", __func__);
+		ts->is_panel_follower = true;
+	}
+
 	return 0;
 }
 
-static int himax_suspend(struct device *dev)
+static void himax_remove(struct i2c_client *arg_client)
+{
+	//struct himax_ts_data *ts = container_of(arg_client, struct himax_ts_data, client);
+	struct himax_ts_data *ts = i2c_get_clientdata(arg_client);
+
+	if (ts->is_panel_follower)
+		drm_panel_remove_follower(&ts->panel_follower);
+}
+
+static int himax_pm_suspend(struct device *dev)
 {
 	struct himax_ts_data *ts = dev_get_drvdata(dev);
 
-	disable_irq(ts->client->irq);
-	return 0;
+	if (ts->is_panel_follower)
+		return 0;
+
+	return himax_suspend(ts);
 }
 
-static int himax_resume(struct device *dev)
+static int himax_pm_resume(struct device *dev)
 {
 	struct himax_ts_data *ts = dev_get_drvdata(dev);
 
-	enable_irq(ts->client->irq);
-	return 0;
+	if (ts->is_panel_follower)
+		return 0;
+
+	return himax_resume(ts);
 }
 
-static DEFINE_SIMPLE_DEV_PM_OPS(himax_pm_ops, himax_suspend, himax_resume);
+static DEFINE_SIMPLE_DEV_PM_OPS(himax_pm_ops, himax_pm_suspend, himax_pm_resume);
 
 static const struct himax_chip hx83100a_chip = {
 	.read_events = hx83100a_read_events,
@@ -423,6 +531,7 @@ MODULE_DEVICE_TABLE(of, himax_of_match);
 
 static struct i2c_driver himax_ts_driver = {
 	.probe = himax_probe,
+	.remove = himax_remove,
 	.id_table = himax_ts_id,
 	.driver = {
 		.name = "Himax-hx83112b-TS",
