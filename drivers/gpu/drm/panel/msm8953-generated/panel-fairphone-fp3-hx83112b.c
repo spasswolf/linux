@@ -52,6 +52,7 @@ static int djn_hx83112b_on(struct djn_hx83112b *ctx)
 	struct mipi_dsi_device *dsi = ctx->dsi;
 	struct device *dev = &dsi->dev;
 	int ret;
+	WARN(1, "Who is calling %s?\n", __func__);
 
 	dsi_dcs_write_seq(dsi, 0xb9, 0x83, 0x11, 0x2b);
 	dsi_dcs_write_seq(dsi, 0xbd, 0x01);
@@ -217,6 +218,7 @@ static int djn_hx83112b_off(struct djn_hx83112b *ctx)
 	struct mipi_dsi_device *dsi = ctx->dsi;
 	struct device *dev = &dsi->dev;
 	int ret;
+	WARN(1, "Who is calling %s?\n", __func__);
 
 	ret = mipi_dsi_dcs_set_display_off(dsi);
 	if (ret < 0) {

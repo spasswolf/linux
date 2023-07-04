@@ -791,7 +791,8 @@ ssize_t mipi_dsi_dcs_write_buffer(struct mipi_dsi_device *dsi,
 	};
 
 	switch (len) {
-	case 0:
+	case 0: 
+		printk(KERN_INFO "%s %d\n", __func__, __LINE__);
 		return -EINVAL;
 
 	case 1:

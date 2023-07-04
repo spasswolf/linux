@@ -1619,8 +1619,10 @@ static ssize_t dsi_host_transfer(struct mipi_dsi_host *host,
 	struct msm_dsi_host *msm_host = to_msm_dsi_host(host);
 	int ret;
 
-	if (!msg || !msm_host->power_on)
+	if (!msg || !msm_host->power_on) {
+		printk(KERN_INFO "%s %d: msg = %px, msm_most->power_on = %d\n", __func__, __LINE__, msg, msm_host->power_on);
 		return -EINVAL;
+	}
 
 	mutex_lock(&msm_host->cmd_mutex);
 	ret = msm_dsi_manager_cmd_xfer(msm_host->id, msg);
@@ -2318,6 +2320,7 @@ int msm_dsi_host_power_on(struct mipi_dsi_host *host,
 	struct msm_dsi_host *msm_host = to_msm_dsi_host(host);
 	const struct msm_dsi_cfg_handler *cfg_hnd = msm_host->cfg_hnd;
 	int ret = 0;
+	WARN(1, "Who is calling %s?\n", __func__);
 
 	mutex_lock(&msm_host->dev_mutex);
 	if (msm_host->power_on) {
@@ -2363,6 +2366,7 @@ int msm_dsi_host_power_on(struct mipi_dsi_host *host,
 	if (msm_host->disp_en_gpio)
 		gpiod_set_value(msm_host->disp_en_gpio, 1);
 
+	printk(KERN_INFO "%s %d: setting msm_host->power_on = true\n", __func__, __LINE__);
 	msm_host->power_on = true;
 	mutex_unlock(&msm_host->dev_mutex);
 
@@ -2383,6 +2387,7 @@ int msm_dsi_host_power_off(struct mipi_dsi_host *host)
 {
 	struct msm_dsi_host *msm_host = to_msm_dsi_host(host);
 	const struct msm_dsi_cfg_handler *cfg_hnd = msm_host->cfg_hnd;
+	WARN(1, "Who is calling %s?\n", __func__);
 
 	mutex_lock(&msm_host->dev_mutex);
 	if (!msm_host->power_on) {
@@ -2407,6 +2412,7 @@ int msm_dsi_host_power_off(struct mipi_dsi_host *host)
 
 	DBG("-");
 
+	printk(KERN_INFO "%s %d: setting msm_host->power_on = false\n", __func__, __LINE__);
 	msm_host->power_on = false;
 
 unlock_ret:
