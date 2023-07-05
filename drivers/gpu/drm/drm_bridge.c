@@ -202,6 +202,7 @@ static LIST_HEAD(bridge_list);
  */
 void drm_bridge_add(struct drm_bridge *bridge)
 {
+	WARN(1, "Who is calling %s for bridge=%px?\n", __func__, bridge);
 	mutex_init(&bridge->hpd_mutex);
 
 	mutex_lock(&bridge_lock);
@@ -314,10 +315,14 @@ int drm_bridge_attach(struct drm_encoder *encoder, struct drm_bridge *bridge,
 	bridge->dev = encoder->dev;
 	bridge->encoder = encoder;
 
-	if (previous)
+	if (previous) {
+		printk(KERN_INFO "%s %d: attaching bridge %px\n", __func__, __LINE__, bridge);
 		list_add(&bridge->chain_node, &previous->chain_node);
-	else
+	}
+	else {
+		printk(KERN_INFO "%s %d: attaching bridge %px\n", __func__, __LINE__, bridge);
 		list_add(&bridge->chain_node, &encoder->bridge_chain);
+	}
 
 	if (bridge->funcs->attach) {
 		ret = bridge->funcs->attach(bridge, flags);
@@ -724,8 +729,10 @@ static void drm_atomic_bridge_call_pre_enable(struct drm_bridge *bridge,
 		if (WARN_ON(!old_bridge_state))
 			return;
 
+		printk(KERN_INFO "%s %d: bridge=%px\n", __func__, __LINE__, bridge);
 		bridge->funcs->atomic_pre_enable(bridge, old_bridge_state);
 	} else if (bridge->funcs->pre_enable) {
+		printk(KERN_INFO "%s %d: bridge=%px\n", __func__, __LINE__, bridge);
 		bridge->funcs->pre_enable(bridge);
 	}
 }
@@ -750,7 +757,8 @@ void drm_atomic_bridge_chain_pre_enable(struct drm_bridge *bridge,
 					struct drm_atomic_state *old_state)
 {
 	struct drm_encoder *encoder;
-	struct drm_bridge *iter, *next, *limit;
+	struct drm_bridge *iter, *next, *limit;		
+	printk(KERN_INFO "%s %d: bridge=%px\n", __func__, __LINE__, bridge);
 
 	if (!bridge)
 		return;
@@ -758,6 +766,7 @@ void drm_atomic_bridge_chain_pre_enable(struct drm_bridge *bridge,
 	encoder = bridge->encoder;
 
 	list_for_each_entry_reverse(iter, &encoder->bridge_chain, chain_node) {
+		printk(KERN_INFO "%s %d: iter=%px\n", __func__, __LINE__, iter);
 		if (iter->pre_enable_prev_first) {
 			next = iter;
 			limit = bridge;
@@ -786,10 +795,12 @@ void drm_atomic_bridge_chain_pre_enable(struct drm_bridge *bridge,
 					 */
 					break;
 
+				printk(KERN_INFO "%s %d: next=%px\n", __func__, __LINE__, next);
 				drm_atomic_bridge_call_pre_enable(next, old_state);
 			}
 		}
 
+		printk(KERN_INFO "%s %d: iter=%px\n", __func__, __LINE__, iter);
 		drm_atomic_bridge_call_pre_enable(iter, old_state);
 
 		if (iter->pre_enable_prev_first)

@@ -473,6 +473,7 @@ struct drm_bridge *msm_dsi_manager_bridge_init(u8 id)
 	struct dsi_bridge *dsi_bridge;
 	struct drm_encoder *encoder;
 	int ret;
+	printk(KERN_INFO "%s %d: id=%u\n", __func__, __LINE__, id);
 
 	dsi_bridge = devm_kzalloc(msm_dsi->dev->dev,
 				sizeof(*dsi_bridge), GFP_KERNEL);
@@ -488,6 +489,7 @@ struct drm_bridge *msm_dsi_manager_bridge_init(u8 id)
 	bridge = &dsi_bridge->base;
 	bridge->funcs = &dsi_mgr_bridge_funcs;
 
+	printk(KERN_INFO "%s %d: bridge=%px\n", __func__, __LINE__, bridge);
 	drm_bridge_add(bridge);
 
 	ret = drm_bridge_attach(encoder, bridge, NULL, 0);
@@ -510,6 +512,7 @@ int msm_dsi_manager_ext_bridge_init(u8 id)
 	struct drm_encoder *encoder;
 	struct drm_bridge *int_bridge, *ext_bridge;
 	int ret;
+	printk(KERN_INFO "%s %d\n", __func__, __LINE__);
 
 	int_bridge = msm_dsi->bridge;
 	ext_bridge = devm_drm_of_get_bridge(&msm_dsi->pdev->dev,
@@ -533,11 +536,13 @@ int msm_dsi_manager_ext_bridge_init(u8 id)
 		 * link the internal dsi bridge to the external bridge,
 		 * connector is created by the next bridge.
 		 */
+		printk(KERN_INFO "%s %d\n", __func__, __LINE__);
 		ret = drm_bridge_attach(encoder, ext_bridge, int_bridge, 0);
 		if (ret < 0)
 			return ret;
 	} else {
 		struct drm_connector *connector;
+		printk(KERN_INFO "%s %d\n", __func__, __LINE__);
 
 		/* We are in charge of the connector, create one now. */
 		connector = drm_bridge_connector_init(dev, encoder);
@@ -550,6 +555,8 @@ int msm_dsi_manager_ext_bridge_init(u8 id)
 		if (ret < 0)
 			return ret;
 	}
+	/* swap bridges in list */
+	list_swap(&encoder->bridge_chain, encoder->bridge_chain.next);
 
 	/* The pipeline is ready, ping encoders if necessary */
 	msm_dsi_manager_set_split_display(id);

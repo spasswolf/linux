@@ -318,6 +318,7 @@ struct drm_connector *drm_bridge_connector_init(struct drm_device *drm,
 	struct i2c_adapter *ddc = NULL;
 	struct drm_bridge *bridge, *panel_bridge = NULL;
 	int connector_type;
+	printk(KERN_INFO "%s %d", __func__, __LINE__);
 
 	bridge_connector = kzalloc(sizeof(*bridge_connector), GFP_KERNEL);
 	if (!bridge_connector)
@@ -341,6 +342,7 @@ struct drm_connector *drm_bridge_connector_init(struct drm_device *drm,
 	 */
 	connector_type = DRM_MODE_CONNECTOR_Unknown;
 	drm_for_each_bridge_in_chain(encoder, bridge) {
+		printk(KERN_INFO "%s %d", __func__, __LINE__);
 		if (!bridge->interlace_allowed)
 			connector->interlace_allowed = false;
 
@@ -359,8 +361,10 @@ struct drm_connector *drm_bridge_connector_init(struct drm_device *drm,
 		if (bridge->ddc)
 			ddc = bridge->ddc;
 
-		if (drm_bridge_is_panel(bridge))
+		if (drm_bridge_is_panel(bridge)) {
+			printk(KERN_INFO "%s %d", __func__, __LINE__);
 			panel_bridge = bridge;
+		}
 	}
 
 	if (connector_type == DRM_MODE_CONNECTOR_Unknown) {

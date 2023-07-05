@@ -214,6 +214,7 @@ int msm_dsi_modeset_init(struct msm_dsi *msm_dsi, struct drm_device *dev,
 {
 	struct msm_drm_private *priv = dev->dev_private;
 	int ret;
+	printk(KERN_INFO "%s %d\n", __func__, __LINE__);
 
 	if (priv->num_bridges == ARRAY_SIZE(priv->bridges)) {
 		DRM_DEV_ERROR(dev->dev, "too many bridges\n");
