@@ -582,6 +582,9 @@ int msm_dsi_manager_ext_bridge_init(u8 id)
 		if (ret < 0)
 			return ret;
 	}
+	/* swap bridges in list, so that dsi and panel are switched
+	 * on and of in the correct order on the fairphone-fp3 */
+	list_swap(&encoder->bridge_chain, encoder->bridge_chain.next);
 
 	/* The pipeline is ready, ping encoders if necessary */
 	msm_dsi_manager_set_split_display(id);
