@@ -134,6 +134,86 @@
 			status = "disabled";
 		};
 
+		pmi632_qg: qg@4800 {
+			compatible = "qcom,pmi632-qg";
+			reg = <0x4800>;
+			io-channels = <&pmi632_adc ADC5_BAT_THERM_100K_PU>,
+				      <&pmi632_adc ADC5_BAT_ID_100K_PU>;
+			io-channel-names = "bat_therm", "bat_id";
+			nvmem = <&pmi632_sdam_2>;
+			nvmem-names = "pmi632_sdam_2";
+			status = "disabled";
+		};
+
+		pmi632_sdam_2: nvram@b100 {
+			compatible = "qcom,spmi-sdam";
+			reg = <0xb100>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges = <0 0xb100 0x100>;
+
+			/* The following values are taken from the SDAM offsets
+			 * in qg-regs.h.
+			 * Do we need these cells or should we use the
+			 * complete nvmem device?
+			 */
+			valid_offset: valid-offset@46 {
+				reg = <0x46 0x1>;
+			};
+
+			soc_offset: soc-offset@47 {
+				reg = <0x47 0x1>;
+			};
+
+			temp_offset: temp-offset@48 {
+				reg = <0x48 0x2>;
+			};
+
+			rbat_offset: rbat-offset@4a {
+				reg = <0x4a 0x2>;
+			};
+
+			ocv_offset: ocv-offset@4c {
+				reg = <0x4c 0x4>;
+			};
+
+			ibat_offset: ibat-offset@50 {
+				reg = <0x50 0x4>;
+			};
+
+			time_offset: time-offset@54 {
+				reg = <0x54 0x4>;
+			};
+
+			cycle_count_offset: cycle-count-offset@58 {
+				reg = <0x58 0x10>;
+			};
+
+			learned_capacity_offset: learned-capacity-offset@68 {
+				reg = <0x68 0x2>;
+			};
+
+			esr_charge_delta_offset: esr-charge-delta-offset@6a {
+				reg = <0x6a 0x4>;
+			};
+
+			esr_discharge_delta_offset: esr-discharge-delta-offset@6e {
+				reg = <0x6e 0x4>;
+			};
+
+			esr_charge_sf_offset: esr-charge-sf-offset@72 {
+				reg = <0x72 0x2>;
+			};
+
+			esr_discharge_sf_offset: esr-discharge-sf-offset@74 {
+				reg = <0x74 0x2>;
+			};
+
+			magic_offset: magic-offset@80 {
+				reg = <0x80 0x4>;
+			};
+		};
+
 		pmi632_sdam_7: nvram@b600 {
 			compatible = "qcom,spmi-sdam";
 			reg = <0xb600>;
