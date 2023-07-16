@@ -952,4 +952,12 @@ config CHARGER_QCOM_SMB2
 	  adds support for the SMB2 switch mode battery charger found
 	  in PMI8998 and related PMICs.
 
+config BATTERY_QCOM_QG
+	tristate "Qualcomm qpnp-qg fuel gauge driver"
+	depends on MFD_SPMI_PMIC
+	depends on IIO
+	help
+	  Say Y here to enable the Qualcomm qpnp-qg Fuel Gauge driver. This
+	  currently only tries to read battery temperature and id via iio.
+
 endif # POWER_SUPPLY
