@@ -369,15 +369,10 @@ static int qcom_qg_get_capacity(struct qcom_qg_chip *chip, int *soc)
 		dev_err(chip->dev, "failed to read vbat, ret = %d\n", ret);
 		return ret;
 	}
-	if (!charging) {
-		// We divide by 1e6 to be because we multiply uA and uOhm
-		// and want the result in uV instead of picoV.
-		ocv = vbat + 
-			(int) ((s64) ibat * (s64) chip->batt_info->factory_internal_resistance_uohm / 1000000);
-	} else {
-		// FIXME?
-		ocv = vbat;
-	}
+
+	ocv = vbat +
+		(int) ((s64) ibat * (s64) chip->batt_info->factory_internal_resistance_uohm / 1000000);
+
 	*soc = power_supply_batinfo_ocv2cap(chip->batt_info, ocv, temp);
 	return 0;
 }
