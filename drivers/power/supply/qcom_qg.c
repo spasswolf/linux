@@ -370,9 +370,10 @@ static int qcom_qg_get_capacity(struct qcom_qg_chip *chip, int *soc)
 		return ret;
 	}
 	if (!charging) {
-		ocv = vbat + ibat / 8; // actually current is multiplied by internal resistance which is 0.125Ohm.
-		// if we use the resistance from the device tree we have to be carefull as 4e6 * 1.25e5 will overflow
-		// an int.
+		// We divide by 1e6 to be because we multiply uA and uOhm
+		// and want the result in uV instead of picoV.
+		ocv = vbat + 
+			(int) ((s64) ibat * (s64) chip->batt_info->factory_internal_resistance_uohm / 1000000);
 	} else {
 		// FIXME?
 		ocv = vbat;
