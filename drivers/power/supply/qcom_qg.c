@@ -402,6 +402,7 @@ static const struct dev_pm_ops qcom_qg_pm_ops = {
 
 
 static enum power_supply_property qcom_qg_props[] = {
+	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
 	POWER_SUPPLY_PROP_CAPACITY,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
@@ -417,11 +418,20 @@ static int qcom_qg_get_property(struct power_supply *psy,
 		union power_supply_propval *val)
 {
 	struct qcom_qg_chip *chip = power_supply_get_drvdata(psy);
-	int ret = 0;
+	int ibat, ret = 0;
 
 	dev_dbg(chip->dev, "Getting property: %d", psp);
 
 	switch (psp) {
+	case POWER_SUPPLY_PROP_STATUS:
+		ret = chip->ops->get_current(chip, &ibat);
+		if (ibat > 0)
+			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+		else if (ibat < 0)
+			val->intval = POWER_SUPPLY_STATUS_CHARGING;
+		else
+			val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
+		break;
 	case POWER_SUPPLY_PROP_TECHNOLOGY:
 		val->intval = POWER_SUPPLY_TECHNOLOGY_LION;
 		break;
