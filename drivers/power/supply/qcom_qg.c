@@ -202,6 +202,8 @@ struct qcom_qg_chip {
 	/* No charger support, yet. */
 	struct power_supply *chg_psy;
 	struct mutex bus_lock;
+	// esr: internal resistance in mOhm
+	int esr;
 	bool battery_missing;
 	int status;
 };
@@ -370,8 +372,7 @@ static int qcom_qg_get_capacity(struct qcom_qg_chip *chip, int *soc)
 		return ret;
 	}
 
-	ocv = vbat +
-		(int) ((s64) ibat * (s64) chip->batt_info->factory_internal_resistance_uohm / 1000000);
+	ocv = vbat + (ibat * chip->esr) / 1000;
 
 	*soc = power_supply_batinfo_ocv2cap(chip->batt_info, ocv, temp);
 	return 0;
@@ -531,6 +532,9 @@ static int qcom_qg_probe(struct platform_device *pdev)
 		dev_err(chip->dev, "Failed to get battery info: %d\n", ret);
 		return ret;
 	}
+
+	// set esr from devicetree, esr in mOhm
+	chip->esr = chip->batt_info->factory_internal_resistance_uohm / 1000;
 
 	chip->nvmem = devm_nvmem_device_get(chip->dev, "pmi632_sdam_2");
 	if (IS_ERR(chip->nvmem)) {
