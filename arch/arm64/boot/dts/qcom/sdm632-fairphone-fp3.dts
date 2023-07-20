@@ -26,11 +26,9 @@
 		compatible = "simple-battery";
 
 		charge-full-design-microamp-hours = <3056000>; // capacity a 25 celsius when charging
-		// the internal resistance value is a very loose guess
-		// based on the vbat and ibat values when the phone is connected and not connected to
-		// the charger and if the current in the connected case is 0.
-		// vbat(connected) = R * I(disconnected) + vbat(disconnected)
-		factory-internal-resistance-micro-ohms = <125000>;
+		// improved guess by using the esr measuring method from qpnp-qg.c
+		// which seems to tediuos to use every time
+		factory-internal-resistance-micro-ohms = <105000>;
 		voltage-max-design-microvolt = <4390000>;      // from downstream devicetree
 		voltage-min-design-microvolt = <3400000>;      // from DEFAULT_VBATT_CUTOFF_MV in qpnp-qg.c
 
