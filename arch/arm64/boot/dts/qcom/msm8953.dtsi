@@ -377,6 +377,24 @@
 		reg = <0 0 0 0>;
 	};
 
+	mpm: interrupt-controller@601d4 {
+		compatible = "qcom,mpm";
+		qcom,rpm-msg-ram = <&apss_mpm>;
+		interrupts = <GIC_SPI 171 IRQ_TYPE_EDGE_RISING>;
+		mboxes = <&apcs 1>;
+		interrupt-controller;
+		#interrupt-cells = <3>;
+		#power-domain-cells = <0>;
+		interrupt-parent = <&intc>;
+		qcom,mpm-pin-count = <96>;
+		qcom,mpm-pin-map = <2 184>,  /* tsens_upper_lower_int */
+				   <37 220>, /* qmp_usb3_lfps_rxterm_irq -> ss_phy_irq */
+				   <49 136>, /* qusb2phy_dpse_hv -> hs_phy_irq*/
+				   <53 72>, /* mdss_irq */
+				   <58 136>, /* qusb2phy_dmse_hv -> hs_phy_irq*/
+				   <88 190>; /* ee0_krait_hlos_spmi_periph_irq */
+	};
+
 	pmu {
 		compatible = "arm,cortex-a53-pmu";
 		interrupts = <GIC_PPI 7 (GIC_CPU_MASK_SIMPLE(8) | IRQ_TYPE_LEVEL_HIGH)>;
@@ -644,6 +662,13 @@
 		rpm_msg_ram: sram@60000 {
 			compatible = "qcom,rpm-msg-ram";
 			reg = <0x00060000 0x8000>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges = <0 0x00060000 0x8000>;
+
+			apss_mpm: sram@1d4 {
+				reg = <0x1d4 0x48>;
+			};
 		};
 
 		hsusb_phy: phy@79000 {
