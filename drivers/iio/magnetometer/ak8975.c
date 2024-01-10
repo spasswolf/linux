@@ -1093,28 +1093,18 @@ static const struct acpi_device_id ak_acpi_match[] = {
 MODULE_DEVICE_TABLE(acpi, ak_acpi_match);
 
 static const struct i2c_device_id ak8975_id[] = {
-<<<<<<< HEAD
 	{"AK8963", (kernel_ulong_t)&ak_def_array[AK8963] },
 	{"ak8963", (kernel_ulong_t)&ak_def_array[AK8963] },
 	{"ak8975", (kernel_ulong_t)&ak_def_array[AK8975] },
 	{"ak09911", (kernel_ulong_t)&ak_def_array[AK09911] },
 	{"ak09912", (kernel_ulong_t)&ak_def_array[AK09912] },
 	{"ak09916", (kernel_ulong_t)&ak_def_array[AK09916] },
-=======
-	{"ak8975", AK8975},
-	{"ak8963", AK8963},
-	{"AK8963", AK8963},
-	{"ak09911", AK09911},
-	{"ak09912", AK09912},
-	{"ak09916", AK09916},
-	{"ak09918", AK09918},
->>>>>>> 849d97a2a884 (iio: magnetometer: ak8975: add AK09118 support)
+	{"ak09918", (kernel_ulong_t)&ak_def_array[AK09918] },
 	{}
 };
 MODULE_DEVICE_TABLE(i2c, ak8975_id);
 
 static const struct of_device_id ak8975_of_match[] = {
-<<<<<<< HEAD
 	{ .compatible = "asahi-kasei,ak8975", .data = &ak_def_array[AK8975] },
 	{ .compatible = "ak8975", .data = &ak_def_array[AK8975] },
 	{ .compatible = "asahi-kasei,ak8963", .data = &ak_def_array[AK8963] },
