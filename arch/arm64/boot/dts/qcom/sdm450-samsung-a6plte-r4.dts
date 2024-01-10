@@ -175,11 +175,6 @@
 			reg = <0x0 0x91400000 0x0 0x500000>;
 			no-map;
 		};
-
-		mba_mem: mba@92000000 {
-			reg = <0x0 0x92000000 0x0 0x50000>;
-			no-map;
-		};
 	};
 
 	vibrator {
