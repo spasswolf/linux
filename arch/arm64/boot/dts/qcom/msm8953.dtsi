@@ -2278,9 +2278,9 @@
 			clocks = <&rpmcc RPM_SMD_IPA_CLK>;
 			clock-names = "core";
 
-			interconnects = <&snoc MAS_IPA &bimc SLV_EBI>,
-				        <&snoc MAS_IPA &snoc SLV_IMEM>,
-					<&bimc MAS_APPS_PROC &pcnoc SLV_IPA_CFG>;
+			interconnects = <&snoc MAS_IPA RPM_ACTIVE_TAG &bimc SLV_EBI RPM_ACTIVE_TAG>,
+				        <&snoc MAS_IPA RPM_ACTIVE_TAG &snoc SLV_IMEM RPM_ACTIVE_TAG>,
+					<&bimc MAS_APPS_PROC RPM_ACTIVE_TAG &pcnoc SLV_IPA_CFG RPM_ACTIVE_TAG>;
 			interconnect-names = "memory",
 					     "imem",
 					     "config";
