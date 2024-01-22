@@ -362,59 +362,6 @@ init_modem_driver_req(struct ipa_qmi *ipa_qmi)
 		}
 	}
 
-	/* The hashed fields are only valid for IPA v3.0+ */
-	if (ipa->version > IPA_VERSION_2_6L) {
-		mem = ipa_mem_find(ipa, IPA_MEM_V4_ROUTE_HASHED);
-		if (mem->size) {
-			req.v4_hash_route_tbl_info_valid = 1;
-			req.v4_hash_route_tbl_info.start =
-					ipa->mem_offset + mem->offset;
-			req.v4_hash_route_tbl_info.end = modem_route_count - 1;
-		}
-
-		mem = ipa_mem_find(ipa, IPA_MEM_V6_ROUTE_HASHED);
-		if (mem->size) {
-			req.v6_hash_route_tbl_info_valid = 1;
-			req.v6_hash_route_tbl_info.start =
-				ipa->mem_offset + mem->offset;
-			req.v6_hash_route_tbl_info.end = modem_route_count - 1;
-		}
-
-		mem = ipa_mem_find(ipa, IPA_MEM_V4_FILTER_HASHED);
-		if (mem->size) {
-			req.v4_hash_filter_tbl_start_valid = 1;
-			req.v4_hash_filter_tbl_start = ipa->mem_offset + mem->offset;
-		}
-
-		mem = ipa_mem_find(ipa, IPA_MEM_V6_FILTER_HASHED);
-		if (mem->size) {
-			req.v6_hash_filter_tbl_start_valid = 1;
-			req.v6_hash_filter_tbl_start = ipa->mem_offset + mem->offset;
-		}
-	}
-
-	/* The stats fields are only valid for IPA v4.0+ */
-	if (ipa->version >= IPA_VERSION_4_0) {
-		mem = ipa_mem_find(ipa, IPA_MEM_STATS_QUOTA_MODEM);
-		if (mem->size) {
-			req.hw_stats_quota_base_addr_valid = 1;
-			req.hw_stats_quota_base_addr =
-				ipa->mem_offset + mem->offset;
-			req.hw_stats_quota_size_valid = 1;
-			req.hw_stats_quota_size = ipa->mem_offset + mem->size;
-		}
-
-		/* If the DROP stats region is defined, include it */
-		mem = ipa_mem_find(ipa, IPA_MEM_STATS_DROP);
-		if (mem && mem->size) {
-			req.hw_stats_drop_base_addr_valid = 1;
-			req.hw_stats_drop_base_addr =
-				ipa->mem_offset + mem->offset;
-			req.hw_stats_drop_size_valid = 1;
-			req.hw_stats_drop_size = ipa->mem_offset + mem->size;
-		}
-	}
-
 	return &req;
 }
 
@@ -549,9 +496,6 @@ void ipa_qmi_signal_uc_loaded(struct ipa *ipa)
 	struct ipa_qmi *ipa_qmi = &ipa->qmi;
 
 	/* This is needed only on IPA 2.x */
-	if (ipa->version > IPA_VERSION_2_6L)
-		return;
-
 	ipa_qmi->uc_ready = true;
 	ipa_qmi_ready(ipa_qmi);
 }

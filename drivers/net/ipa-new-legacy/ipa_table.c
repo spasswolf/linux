@@ -193,8 +193,7 @@ static void ipa_table_reset_add(struct ipa_dma_trans *trans, bool filter,
 {
 	struct ipa *ipa = container_of(trans->ipa_dma, struct ipa, ipa_dma);
 	const struct ipa_mem *mem;
-	const size_t entry_size = ipa->version > IPA_VERSION_2_6L ?
-				sizeof(__le64) : sizeof(__le32);
+	const size_t entry_size = sizeof(__le32);
 	dma_addr_t addr;
 	u32 offset;
 	u16 size;
@@ -351,20 +350,12 @@ int ipa_table_hash_flush(struct ipa *ipa)
 		return -EBUSY;
 	}
 
-	if (ipa->version < IPA_VERSION_5_0) {
-		reg = ipa_reg(ipa, FILT_ROUT_HASH_FLUSH);
+	reg = ipa_reg(ipa, FILT_ROUT_HASH_FLUSH);
 
-		val = reg_bit(reg, IPV6_ROUTER_HASH);
-		val |= reg_bit(reg, IPV6_FILTER_HASH);
-		val |= reg_bit(reg, IPV4_ROUTER_HASH);
-		val |= reg_bit(reg, IPV4_FILTER_HASH);
-	} else {
-		reg = ipa_reg(ipa, FILT_ROUT_CACHE_FLUSH);
-
-		/* IPA v5.0+ uses a unified cache (both IPv4 and IPv6) */
-		val = reg_bit(reg, ROUTER_CACHE);
-		val |= reg_bit(reg, FILTER_CACHE);
-	}
+	val = reg_bit(reg, IPV6_ROUTER_HASH);
+	val |= reg_bit(reg, IPV6_FILTER_HASH);
+	val |= reg_bit(reg, IPV4_ROUTER_HASH);
+	val |= reg_bit(reg, IPV4_FILTER_HASH);
 
 	ipa_cmd_register_write_add(trans, reg_offset(reg), val, val, false);
 
@@ -379,8 +370,7 @@ static void ipa_table_init_add(struct ipa_dma_trans *trans, bool filter, bool ip
 	const struct ipa_mem *mem;
 	const struct ipa_mem *hash_mem;
 	enum ipa_cmd_opcode opcode;
-	const size_t entry_size = ipa->version > IPA_VERSION_2_6L ?
-				sizeof(__le64) : sizeof(__le32);
+	const size_t entry_size = sizeof(__le32);
 	dma_addr_t hash_addr;
 	dma_addr_t addr;
 	u32 hash_offset;
@@ -499,22 +489,13 @@ static void ipa_filter_tuple_zero(struct ipa_endpoint *endpoint)
 	u32 offset;
 	u32 val;
 
-	if (ipa->version < IPA_VERSION_5_0) {
-		reg = ipa_reg(ipa, ENDP_FILTER_ROUTER_HSH_CFG);
+	reg = ipa_reg(ipa, ENDP_FILTER_ROUTER_HSH_CFG);
 
-		offset = reg_n_offset(reg, endpoint_id);
-		val = ioread32(endpoint->ipa->reg_virt + offset);
+	offset = reg_n_offset(reg, endpoint_id);
+	val = ioread32(endpoint->ipa->reg_virt + offset);
 
-		/* Zero all filter-related fields, preserving the rest */
-		val &= ~reg_fmask(reg, FILTER_HASH_MSK_ALL);
-	} else {
-		/* IPA v5.0 separates filter and router cache configuration */
-		reg = ipa_reg(ipa, ENDP_FILTER_CACHE_CFG);
-		offset = reg_n_offset(reg, endpoint_id);
-
-		/* Zero all filter-related fields */
-		val = 0;
-	}
+	/* Zero all filter-related fields, preserving the rest */
+	val &= ~reg_fmask(reg, FILTER_HASH_MSK_ALL);
 
 	iowrite32(val, endpoint->ipa->reg_virt + offset);
 }
@@ -558,22 +539,13 @@ static void ipa_route_tuple_zero(struct ipa *ipa, u32 route_id)
 	u32 offset;
 	u32 val;
 
-	if (ipa->version < IPA_VERSION_5_0) {
-		reg = ipa_reg(ipa, ENDP_FILTER_ROUTER_HSH_CFG);
-		offset = reg_n_offset(reg, route_id);
+	reg = ipa_reg(ipa, ENDP_FILTER_ROUTER_HSH_CFG);
+	offset = reg_n_offset(reg, route_id);
 
-		val = ioread32(ipa->reg_virt + offset);
+	val = ioread32(ipa->reg_virt + offset);
 
-		/* Zero all route-related fields, preserving the rest */
-		val &= ~reg_fmask(reg, ROUTER_HASH_MSK_ALL);
-	} else {
-		/* IPA v5.0 separates filter and router cache configuration */
-		reg = ipa_reg(ipa, ENDP_ROUTER_CACHE_CFG);
-		offset = reg_n_offset(reg, route_id);
-
-		/* Zero all route-related fields */
-		val = 0;
-	}
+	/* Zero all route-related fields, preserving the rest */
+	val &= ~reg_fmask(reg, ROUTER_HASH_MSK_ALL);
 
 	iowrite32(val, ipa->reg_virt + offset);
 }
@@ -606,8 +578,7 @@ void ipa_table_config(struct ipa *ipa)
 bool ipa_table_mem_valid(struct ipa *ipa, bool filter)
 {
 	bool hash_support = ipa_table_hash_support(ipa);
-	const size_t entry_size = ipa->version > IPA_VERSION_2_6L 
-				? sizeof(__le64) : sizeof (__le32);
+	const size_t entry_size = sizeof (__le32);
 	const struct ipa_mem *mem_hashed;
 	const struct ipa_mem *mem_ipv4;
 	const struct ipa_mem *mem_ipv6;
@@ -686,15 +657,9 @@ bool ipa_table_mem_valid(struct ipa *ipa, bool filter)
 static inline void *ipa_table_write(enum ipa_version version,
 				   void *virt, u64 value)
 {
-	if (version > IPA_VERSION_2_6L) {
-		__le64 *ptr = virt;
-		*ptr = cpu_to_le64(value);
-		return virt + sizeof(__le64);
-	} else {
-		__le32 *ptr = virt;
-		*ptr = cpu_to_le32(value);
-		return virt + sizeof(__le32);
-	}
+	__le32 *ptr = virt;
+	*ptr = cpu_to_le32(value);
+	return virt + sizeof(__le32);
 }
 
 /*
@@ -734,8 +699,7 @@ int ipa_table_init(struct ipa *ipa)
 	enum ipa_version version = ipa->version;
 	struct device *dev = &ipa->pdev->dev;
 	u64 filter_map;
-	const size_t entry_size = ipa->version > IPA_VERSION_2_6L ?
-				sizeof(__le64) : sizeof(__le32);
+	const size_t entry_size = sizeof(__le32);
 	dma_addr_t addr;
 	void *virt;
 	size_t size;
@@ -769,12 +733,7 @@ int ipa_table_init(struct ipa *ipa)
 	 * filtering, which is possible but not used.  IPA v5.0+ eliminated
 	 * that option, so there's no shifting required.
 	 */
-	if (version <= IPA_VERSION_2_6L)
-		filter_map = (ipa->filtered << 1 ) | 1;
-	else if (ipa->version < IPA_VERSION_5_0)
-		filter_map = ipa->filtered << 1;
-	else
-		filter_map = ipa->filtered;
+	filter_map = (ipa->filtered << 1 ) | 1;
 
 	virt = ipa_table_write(version, virt, filter_map);
 
@@ -789,8 +748,7 @@ void ipa_table_exit(struct ipa *ipa)
 {
 	u32 count = max_t(u32, 1 + ipa->filter_count, ipa->route_count);
 	struct device *dev = &ipa->pdev->dev;
-	const size_t entry_size = ipa->version > IPA_VERSION_2_6L ?
-				sizeof(__le64) : sizeof(__le32);
+	const size_t entry_size = sizeof(__le32);
 
 	size_t size;
 

@@ -20,30 +20,6 @@ static const char *ipa_version_string(struct ipa *ipa)
 		return "2.5";
 	case IPA_VERSION_2_6L:
 		return "2.6L";
-	case IPA_VERSION_3_0:
-		return "3.0";
-	case IPA_VERSION_3_1:
-		return "3.1";
-	case IPA_VERSION_3_5:
-		return "3.5";
-	case IPA_VERSION_3_5_1:
-		return "3.5.1";
-	case IPA_VERSION_4_0:
-		return "4.0";
-	case IPA_VERSION_4_1:
-		return "4.1";
-	case IPA_VERSION_4_2:
-		return "4.2";
-	case IPA_VERSION_4_5:
-		return "4.5";
-	case IPA_VERSION_4_7:
-		return "4.7";
-	case IPA_VERSION_4_9:
-		return "4.9";
-	case IPA_VERSION_4_11:
-		return "4.11";
-	case IPA_VERSION_5_0:
-		return "5.0";
 	default:
 		return "0.0";	/* Won't happen (checked at probe time) */
 	}
@@ -70,7 +46,7 @@ const struct attribute_group ipa_attribute_group = {
 
 static const char *ipa_offload_string(struct ipa *ipa)
 {
-	return ipa->version < IPA_VERSION_4_5 ? "MAPv4" : "MAPv5";
+	return "MAPv4";
 }
 
 static ssize_t rx_offload_show(struct device *dev,

@@ -221,81 +221,8 @@ static void ipa_smp2p_power_release(struct ipa *ipa)
 /* Initialize the IPA SMP2P subsystem */
 int ipa_smp2p_init(struct ipa *ipa, bool modem_init)
 {
-	struct qcom_smem_state *enabled_state;
-	struct device *dev = &ipa->pdev->dev;
-	struct qcom_smem_state *valid_state;
-	struct ipa_smp2p *smp2p;
-	u32 enabled_bit;
-	u32 valid_bit;
-	int ret;
-
 	/* With IPA v2.6L and earlier SMP2P interrupts are used */
-	if (ipa->version <= IPA_VERSION_2_6L)
-		return 0;
-
-	valid_state = qcom_smem_state_get(dev, "ipa-clock-enabled-valid",
-					  &valid_bit);
-	if (IS_ERR(valid_state))
-		return PTR_ERR(valid_state);
-	if (valid_bit >= 32)		/* BITS_PER_U32 */
-		return -EINVAL;
-
-	enabled_state = qcom_smem_state_get(dev, "ipa-clock-enabled",
-					    &enabled_bit);
-	if (IS_ERR(enabled_state))
-		return PTR_ERR(enabled_state);
-	if (enabled_bit >= 32)		/* BITS_PER_U32 */
-		return -EINVAL;
-
-	smp2p = kzalloc(sizeof(*smp2p), GFP_KERNEL);
-	if (!smp2p)
-		return -ENOMEM;
-
-	smp2p->ipa = ipa;
-
-	/* These fields are needed by the power query interrupt
-	 * handler, so initialize them now.
-	 */
-	mutex_init(&smp2p->mutex);
-	smp2p->valid_state = valid_state;
-	smp2p->valid_bit = valid_bit;
-	smp2p->enabled_state = enabled_state;
-	smp2p->enabled_bit = enabled_bit;
-
-	/* We have enough information saved to handle notifications */
-	ipa->smp2p = smp2p;
-
-	ret = ipa_smp2p_irq_init(smp2p, "ipa-clock-query",
-				 ipa_smp2p_modem_clk_query_isr);
-	if (ret < 0)
-		goto err_null_smp2p;
-	smp2p->clock_query_irq = ret;
-
-	ret = ipa_smp2p_panic_notifier_register(smp2p);
-	if (ret)
-		goto err_irq_exit;
-
-	if (modem_init) {
-		/* Result will be non-zero (negative for error) */
-		ret = ipa_smp2p_irq_init(smp2p, "ipa-setup-ready",
-					 ipa_smp2p_modem_setup_ready_isr);
-		if (ret < 0)
-			goto err_notifier_unregister;
-		smp2p->setup_ready_irq = ret;
-	}
-
 	return 0;
-
-err_notifier_unregister:
-	ipa_smp2p_panic_notifier_unregister(smp2p);
-err_irq_exit:
-	ipa_smp2p_irq_exit(smp2p, smp2p->clock_query_irq);
-err_null_smp2p:
-	ipa->smp2p = NULL;
-	mutex_destroy(&smp2p->mutex);
-	kfree(smp2p);
-
-	return ret;
 }
 
 void ipa_smp2p_exit(struct ipa *ipa)

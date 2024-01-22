@@ -47,21 +47,20 @@ static bool ipa_interrupt_check_fixup(enum ipa_irq_id *irq_id, enum ipa_version 
 {
 	switch (*irq_id) {
 	case IPA_IRQ_EOT_COAL:
-		return version < IPA_VERSION_3_5;
+		return true;
 	case IPA_IRQ_DCMP:
-		return version < IPA_VERSION_4_5;
+		return true;
 	case IPA_IRQ_TLV_LEN_MIN_DSM:
-		return version >= IPA_VERSION_4_5;
+		return false;
 	default:
 		break;
 	}
 
 	if (*irq_id >= IPA_IRQ_DRBIP_PKT_EXCEED_MAX_SIZE_EN)
-		return version >= IPA_VERSION_4_9;
+		return false;
 	else if (*irq_id > IPA_IRQ_BAM_GSI_IDLE)
-		return version >= IPA_VERSION_3_0;
-	else if (version <= IPA_VERSION_2_6L &&
-			*irq_id >= IPA_IRQ_PROC_UC_ACK_Q_NOT_EMPTY)
+		return false;
+	else if (*irq_id >= IPA_IRQ_PROC_UC_ACK_Q_NOT_EMPTY)
 		*irq_id += 2;
 
 	return true;
@@ -80,8 +79,8 @@ static void ipa_interrupt_process(struct ipa_interrupt *interrupt, u32 irq_id)
 
 	/* For IPA v2 we have to substract 2 as the ipa_irq_id enum
 	 * is defined for IPA v3 */
-        if (ipa->version <= IPA_VERSION_2_6L &&
-                       irq_id >= IPA_IRQ_PROC_UC_ACK_Q_NOT_EMPTY + 2)
+	/* FIXME: redefine the ipa_irq_id enum for IPA v2 */
+        if (irq_id >= IPA_IRQ_PROC_UC_ACK_Q_NOT_EMPTY + 2)
 		irq_id -= 2;
 
 	switch (irq_id) {
@@ -211,20 +210,7 @@ static void ipa_interrupt_suspend_control(struct ipa_interrupt *interrupt,
 
 	WARN_ON(!test_bit(endpoint_id, ipa->available));
 
-	/* IPA version <= 3.0 does not support TX_SUSPEND interrupt control */
-	if (ipa->version <= IPA_VERSION_3_0)
-		return;
-
-	reg = ipa_reg(ipa, IRQ_SUSPEND_EN);
-	offset = reg_n_offset(reg, unit);
-	val = ioread32(ipa->reg_virt + offset);
-
-	if (enable)
-		val |= mask;
-	else
-		val &= ~mask;
-
-	iowrite32(val, ipa->reg_virt + offset);
+	return;
 }
 
 /* Enable TX_SUSPEND for an endpoint */
@@ -255,13 +241,6 @@ void ipa_interrupt_suspend_clear_all(struct ipa_interrupt *interrupt)
 
 		reg = ipa_reg(ipa, IRQ_SUSPEND_INFO);
 		val = ioread32(ipa->reg_virt + reg_n_offset(reg, unit));
-
-		/* SUSPEND interrupt status isn't cleared on IPA version <= 3.0 */
-		if (ipa->version <= IPA_VERSION_3_0)
-			continue;
-
-		reg = ipa_reg(ipa, IRQ_SUSPEND_CLR);
-		iowrite32(val, ipa->reg_virt + reg_n_offset(reg, unit));
 	}
 }
 

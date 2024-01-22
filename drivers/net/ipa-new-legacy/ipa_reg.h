@@ -634,14 +634,6 @@ enum ipa_reg_ipa_irq_uc_field_id {
 extern const struct regs ipa_regs_v2_0;
 extern const struct regs ipa_regs_v2_5;
 extern const struct regs ipa_regs_v2_6l;
-extern const struct regs ipa_regs_v3_1;
-extern const struct regs ipa_regs_v3_5_1;
-extern const struct regs ipa_regs_v4_2;
-extern const struct regs ipa_regs_v4_5;
-extern const struct regs ipa_regs_v4_7;
-extern const struct regs ipa_regs_v4_9;
-extern const struct regs ipa_regs_v4_11;
-extern const struct regs ipa_regs_v5_0;
 
 const struct reg *ipa_reg(struct ipa *ipa, enum ipa_reg_id reg_id);
 

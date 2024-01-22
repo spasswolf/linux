@@ -163,19 +163,5 @@ static void ipa_resource_config_dst(struct ipa *ipa, u32 resource_type,
 /* Configure resources; there is no ipa_resource_deconfig() */
 int ipa_resource_config(struct ipa *ipa, const struct ipa_resource_data *data)
 {
-	u32 i;
-
-	if (ipa->version <= IPA_VERSION_2_6L)
-		return 0;
-
-	if (!ipa_resource_limits_valid(ipa, data))
-		return -EINVAL;
-
-	for (i = 0; i < data->resource_src_count; i++)
-		ipa_resource_config_src(ipa, i, data);
-
-	for (i = 0; i < data->resource_dst_count; i++)
-		ipa_resource_config_dst(ipa, i, data);
-
 	return 0;
 }

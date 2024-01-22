@@ -34,6 +34,7 @@ enum ipa_version {
 	IPA_VERSION_2_0,
 	IPA_VERSION_2_5,
 	IPA_VERSION_2_6L,
+#if 0
 	IPA_VERSION_3_0,
 	IPA_VERSION_3_1,
 	IPA_VERSION_3_5,
@@ -48,6 +49,7 @@ enum ipa_version {
 	IPA_VERSION_5_0,
 	IPA_VERSION_5_1,
 	IPA_VERSION_5_5,
+#endif
 	IPA_VERSION_COUNT,			/* Last; not a version */
 };
 

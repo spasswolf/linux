@@ -109,7 +109,7 @@ union ipa_uc_mem_area {
 };
 
 #define UC_FIELD(_ipa, _field)			\
-	*((_ipa->version >= IPA_VERSION_3_0) ?	\
+	*(false ?	\
 	  &(ipa_uc_shared(_ipa)->v3._field) :	\
 	  &(ipa_uc_shared(_ipa)->v2._field))
 
@@ -266,8 +266,6 @@ static void send_uc_command(struct ipa *ipa, u32 command, u32 command_param)
 	/* Fill in the command data */
 	UC_FIELD(ipa, command) = command;
 	UC_FIELD(ipa, command_param) = cpu_to_le32(command_param);
-	if (ipa->version >= IPA_VERSION_3_0)
-		ipa_uc_shared(ipa)->v3.command_param_hi = 1;
 	UC_FIELD(ipa, response) = 0;
 	UC_FIELD(ipa, response_param) = 0;
 

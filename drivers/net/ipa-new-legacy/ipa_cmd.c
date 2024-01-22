@@ -149,7 +149,7 @@ union ipa_cmd_hw_dma_mem_mem {
 
 #define SET_DMA_FIELD(_ver, _payload, _field, _value)			\
 	do {								\
-		if ((_ver) >= IPA_VERSION_3_0)				\
+		if ((_ver) > IPA_VERSION_2_6L)				\
 			(_payload)->v3._field = cpu_to_le64(_value);	\
 		else							\
 			(_payload)->v2._field = cpu_to_le32(_value);	\
@@ -306,8 +306,6 @@ static bool ipa_cmd_register_write_offset_valid(struct ipa *ipa,
 	 * allowed.
 	 */
 	bit_count = BITS_PER_BYTE * sizeof(payload->offset);
-	if (ipa->version >= IPA_VERSION_4_0)
-		bit_count += hweight32(REGISTER_WRITE_FLAGS_OFFSET_HIGH_FMASK);
 	BUILD_BUG_ON(bit_count > 32);
 	offset_max = ~0U >> (32 - bit_count);
 
@@ -330,21 +328,6 @@ static bool ipa_cmd_register_write_valid(struct ipa *ipa)
 	const struct reg *reg;
 	const char *name;
 	u32 offset;
-
-	/* If hashed tables are supported, ensure the hash flush register
-	 * offset will fit in a register write IPA immediate command.
-	 */
-	if (ipa_table_hash_support(ipa)) {
-		if (ipa->version < IPA_VERSION_5_0)
-			reg = ipa_reg(ipa, FILT_ROUT_HASH_FLUSH);
-		else
-			reg = ipa_reg(ipa, FILT_ROUT_CACHE_FLUSH);
-
-		offset = reg_offset(reg);
-		name = "filter/route hash flush";
-		if (!ipa_cmd_register_write_offset_valid(ipa, name, offset))
-			return false;
-	}
 
 	/* Each endpoint can have a status endpoint associated with it,
 	 * and this is recorded in an endpoint register.  If the modem
@@ -412,17 +395,8 @@ void ipa_cmd_table_init_add(struct ipa_dma_trans *trans,
 	/* Record the non-hash table offset and size */
 	offset += ipa->mem_offset;
 
-	if (version >= IPA_VERSION_3_0) {
-		val = u64_encode_bits(offset, IP_FLTRT_FLAGS_NHASH_ADDR_FMASK);
-		val |= u64_encode_bits(size, IP_FLTRT_FLAGS_NHASH_SIZE_FMASK);
-	} else if (opcode == IPA_CMD_IP_V4_FILTER_INIT ||
-		   opcode == IPA_CMD_IP_V4_ROUTING_INIT) {
-		val = u64_encode_bits(offset, IP_V2_IPV4_FLTRT_FLAGS_ADDR_FMASK);
-		val |= u64_encode_bits(size, IP_V2_IPV4_FLTRT_FLAGS_SIZE_FMASK);
-	} else { /* IPA <= v2.6L IPv6 */
-		val = u64_encode_bits(offset, IP_V2_IPV6_FLTRT_FLAGS_ADDR_FMASK);
-		val |= u64_encode_bits(size, IP_V2_IPV6_FLTRT_FLAGS_SIZE_FMASK);
-	}
+	val = u64_encode_bits(offset, IP_V2_IPV6_FLTRT_FLAGS_ADDR_FMASK);
+	val |= u64_encode_bits(size, IP_V2_IPV6_FLTRT_FLAGS_SIZE_FMASK);
 
 	/* The hash table offset and address are zero if its size is 0 */
 	if (hash_size) {
@@ -438,8 +412,6 @@ void ipa_cmd_table_init_add(struct ipa_dma_trans *trans,
 	payload = &cmd_payload->table_init;
 
 	/* Fill in all offsets and sizes and the non-hash table address */
-	if (hash_size && version >= IPA_VERSION_3_0)
-		payload->v3.hash_rules_addr = cpu_to_le64(hash_addr);
 	SET_DMA_FIELD(version, payload, flags, val);
 	SET_DMA_FIELD(version, payload, nhash_rules_addr, addr);
 
@@ -492,37 +464,8 @@ void ipa_cmd_register_write_add(struct ipa_dma_trans *trans, u32 offset, u32 val
 	/* pipeline_clear_src_grp is not used */
 	clear_option = clear_full ? pipeline_clear_full : pipeline_clear_hps;
 
-	/* IPA v4.0+ represents the pipeline clear options in the opcode.  It
-	 * also supports a larger offset by encoding additional high-order
-	 * bits in the payload flags field.
-	 */
-	if (ipa->version >= IPA_VERSION_4_0) {
-		u16 offset_high;
-		u32 val;
-
-		/* Opcode encodes pipeline clear options */
-		/* SKIP_CLEAR is always 0 (don't skip pipeline clear) */
-		val = u16_encode_bits(clear_option,
-				      REGISTER_WRITE_OPCODE_CLEAR_OPTION_FMASK);
-		opcode |= val;
-
-		/* Extract the high 4 bits from the offset */
-		offset_high = (u16)u32_get_bits(offset, GENMASK(19, 16));
-		offset &= (1 << 16) - 1;
-
-		/* Extract the top 4 bits and encode it into the flags field */
-		flags = u16_encode_bits(offset_high,
-				REGISTER_WRITE_FLAGS_OFFSET_HIGH_FMASK);
-		options = 0;	/* reserved */
-
-	} else {
-		flags = 0;	/* SKIP_CLEAR flag is always 0 */
-		if (ipa->version > IPA_VERSION_2_6L)
-			options = u16_encode_bits(clear_option,
-					REGISTER_WRITE_CLEAR_OPTIONS_FMASK);
-		else
-			options = 0;
-	}
+	flags = 0;	/* SKIP_CLEAR flag is always 0 */
+	options = 0;
 
 	cmd_payload = ipa_cmd_payload_alloc(ipa, &payload_addr);
 	payload = &cmd_payload->register_write;
@@ -549,13 +492,8 @@ static void ipa_cmd_ip_packet_init_add(struct ipa_dma_trans *trans, u8 endpoint_
 	cmd_payload = ipa_cmd_payload_alloc(ipa, &payload_addr);
 	payload = &cmd_payload->ip_packet_init;
 
-	if (ipa->version < IPA_VERSION_5_0) {
-		payload->dest_endpoint =
-			u8_encode_bits(endpoint_id,
-				       IPA_PACKET_INIT_DEST_ENDPOINT_FMASK);
-	} else {
-		payload->dest_endpoint = endpoint_id;
-	}
+	payload->dest_endpoint =
+		u8_encode_bits(endpoint_id, IPA_PACKET_INIT_DEST_ENDPOINT_FMASK);
 
 	ipa_dma_trans_cmd_add(trans, payload, sizeof(*payload), payload_addr,
 			  opcode);
@@ -613,10 +551,7 @@ static void ipa_cmd_ip_tag_status_add(struct ipa_dma_trans *trans)
 	dma_addr_t payload_addr;
 	u64 tag_mask;
 
-	if (trans->ipa_dma->version <= IPA_VERSION_2_6L)
-		tag_mask = IPA_V2_IP_PACKET_TAG_STATUS_TAG_FMASK;
-	else
-		tag_mask = IPA_V3_IP_PACKET_TAG_STATUS_TAG_FMASK;
+	tag_mask = IPA_V2_IP_PACKET_TAG_STATUS_TAG_FMASK;
 
 	cmd_payload = ipa_cmd_payload_alloc(ipa, &payload_addr);
 	payload = &cmd_payload->ip_packet_tag_status;

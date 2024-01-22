@@ -211,8 +211,8 @@ ipa_hardware_config_bcr(struct ipa *ipa, const struct ipa_data *data)
 	const struct reg *reg;
 	u32 val;
 
-	/* IPA 2.0 and IPA v4.5+ have no backward compatibility register */
-	if (ipa->version >= IPA_VERSION_4_5 && ipa->version <= IPA_VERSION_2_0)
+	/* IPA 2.0 and has no backward compatibility register */
+	if (ipa->version <= IPA_VERSION_2_0)
 		return;
 
 	reg = ipa_reg(ipa, IPA_BCR);
@@ -222,49 +222,10 @@ ipa_hardware_config_bcr(struct ipa *ipa, const struct ipa_data *data)
 
 static void ipa_hardware_config_tx(struct ipa *ipa)
 {
-	enum ipa_version version = ipa->version;
-	const struct reg *reg;
-	u32 offset;
-	u32 val;
-
-	if (version <= IPA_VERSION_4_0 || version >= IPA_VERSION_4_5)
-		return;
-
-	/* Disable PA mask to allow HOLB drop */
-	reg = ipa_reg(ipa, IPA_TX_CFG);
-	offset = reg_offset(reg);
-
-	val = ioread32(ipa->reg_virt + offset);
-
-	val &= ~reg_bit(reg, PA_MASK_EN);
-
-	iowrite32(val, ipa->reg_virt + offset);
 }
 
 static void ipa_hardware_config_clkon(struct ipa *ipa)
 {
-	enum ipa_version version = ipa->version;
-	const struct reg *reg;
-	u32 val;
-
-	if (version >= IPA_VERSION_4_5)
-		return;
-
-	if (version < IPA_VERSION_4_0 && version != IPA_VERSION_3_1)
-		return;
-
-	/* Implement some hardware workarounds */
-	reg = ipa_reg(ipa, CLKON_CFG);
-	if (version == IPA_VERSION_3_1) {
-		/* Disable MISC clock gating */
-		val = reg_bit(reg, CLKON_MISC);
-	} else {	/* IPA v4.0+ */
-		/* Enable open global clocks in the CLKON configuration */
-		val = reg_bit(reg, CLKON_GLOBAL);
-		val |= reg_bit(reg, GLOBAL_2X_CLK);
-	}
-
-	iowrite32(val, ipa->reg_virt + reg_offset(reg));
 }
 
 /* Configure bus access behavior for IPA components */
@@ -274,39 +235,18 @@ static void ipa_hardware_config_comp(struct ipa *ipa)
 	u32 offset;
 	u32 val;
 
-	if (ipa->version <= IPA_VERSION_2_6L) {
-		reg = ipa_reg(ipa, COMP_SW_RESET);
-		offset = reg_offset(reg);
-		
-		iowrite32(1, ipa->reg_virt + offset);
-		iowrite32(0, ipa->reg_virt + offset);
-	}
-
-	/* Nothing to configure on IPA v3.* */
-	if (ipa->version >= IPA_VERSION_3_0 && ipa->version < IPA_VERSION_4_0)
-		return;
+	reg = ipa_reg(ipa, COMP_SW_RESET);
+	offset = reg_offset(reg);
+	
+	iowrite32(1, ipa->reg_virt + offset);
+	iowrite32(0, ipa->reg_virt + offset);
 
 	reg = ipa_reg(ipa, COMP_CFG);
 	offset = reg_offset(reg);
 
 	val = ioread32(ipa->reg_virt + offset);
 
-	if (ipa->version <= IPA_VERSION_2_6L) {
-		val |= reg_bit(reg, COMP_CFG_ENABLE);
-	} else {
-		if (ipa->version == IPA_VERSION_4_0) {
-			val &= ~reg_bit(reg, IPA_QMB_SELECT_CONS_EN);
-			val &= ~reg_bit(reg, IPA_QMB_SELECT_PROD_EN);
-			val &= ~reg_bit(reg, IPA_QMB_SELECT_GLOBAL_EN);
-		} else if (ipa->version < IPA_VERSION_4_5) {
-			val |= reg_bit(reg, GSI_MULTI_AXI_MASTERS_DIS);
-		} else {
-			/* For IPA v4.5 FULL_FLUSH_WAIT_RS_CLOSURE_EN is 0 */
-		}
-
-		val |= reg_bit(reg, GSI_MULTI_INORDER_RD_DIS);
-		val |= reg_bit(reg, GSI_MULTI_INORDER_WR_DIS);
-	}
+	val |= reg_bit(reg, COMP_CFG_ENABLE);
 
 	iowrite32(val, ipa->reg_virt + offset);
 }
@@ -315,44 +255,7 @@ static void ipa_hardware_config_comp(struct ipa *ipa)
 static void
 ipa_hardware_config_qsb(struct ipa *ipa, const struct ipa_data *data)
 {
-	const struct ipa_qsb_data *data0;
-	const struct ipa_qsb_data *data1;
-	const struct reg *reg;
-	u32 val;
-
-	/* Nothing to configure on IPA v2.* */
-	if (ipa->version < IPA_VERSION_3_0)
-		return;
-
-	/* QMB 0 represents DDR; QMB 1 (if present) represents PCIe */
-	data0 = &data->qsb_data[IPA_QSB_MASTER_DDR];
-	if (data->qsb_count > 1)
-		data1 = &data->qsb_data[IPA_QSB_MASTER_PCIE];
-
-	/* Max outstanding write accesses for QSB masters */
-	reg = ipa_reg(ipa, QSB_MAX_WRITES);
-
-	val = reg_encode(reg, GEN_QMB_0_MAX_WRITES, data0->max_writes);
-	if (data->qsb_count > 1)
-		val |= reg_encode(reg, GEN_QMB_1_MAX_WRITES, data1->max_writes);
-
-	iowrite32(val, ipa->reg_virt + reg_offset(reg));
-
-	/* Max outstanding read accesses for QSB masters */
-	reg = ipa_reg(ipa, QSB_MAX_READS);
-
-	val = reg_encode(reg, GEN_QMB_0_MAX_READS, data0->max_reads);
-	if (ipa->version >= IPA_VERSION_4_0)
-		val |= reg_encode(reg, GEN_QMB_0_MAX_READS_BEATS,
-				  data0->max_reads_beats);
-	if (data->qsb_count > 1) {
-		val = reg_encode(reg, GEN_QMB_1_MAX_READS, data1->max_reads);
-		if (ipa->version >= IPA_VERSION_4_0)
-			val |= reg_encode(reg, GEN_QMB_1_MAX_READS_BEATS,
-					  data1->max_reads_beats);
-	}
-
-	iowrite32(val, ipa->reg_virt + reg_offset(reg));
+	return;
 }
 
 /* The internal inactivity timer clock is used for the aggregation timer */
@@ -410,12 +313,7 @@ static void ipa_qtime_config(struct ipa *ipa)
 	reg = ipa_reg(ipa, TIMERS_PULSE_GRAN_CFG);
 	val = reg_encode(reg, PULSE_GRAN_0, IPA_GRAN_100_US);
 	val |= reg_encode(reg, PULSE_GRAN_1, IPA_GRAN_1_MS);
-	if (ipa->version >= IPA_VERSION_5_0) {
-		val |= reg_encode(reg, PULSE_GRAN_2, IPA_GRAN_10_MS);
-		val |= reg_encode(reg, PULSE_GRAN_3, IPA_GRAN_10_MS);
-	} else {
-		val |= reg_encode(reg, PULSE_GRAN_2, IPA_GRAN_1_MS);
-	}
+	val |= reg_encode(reg, PULSE_GRAN_2, IPA_GRAN_1_MS);
 
 	iowrite32(val, ipa->reg_virt + reg_offset(reg));
 
@@ -448,50 +346,19 @@ static void ipa_hardware_config_counter(struct ipa *ipa)
 
 static void ipa_hardware_config_timing(struct ipa *ipa)
 {
-	if (ipa->version < IPA_VERSION_4_5)
-		ipa_hardware_config_counter(ipa);
-	else
-		ipa_qtime_config(ipa);
+	ipa_hardware_config_counter(ipa);
 }
 
 static void ipa_hardware_config_hashing(struct ipa *ipa)
 {
-	const struct reg *reg;
-
-	/* Other than IPA v4.2, all versions enable "hashing".  Starting
-	 * with IPA v5.0, the filter and router tables are implemented
-	 * differently, but the default configuration enables this feature
-	 * (now referred to as "cacheing"), so there's nothing to do here.
-	 */
-	if (ipa->version != IPA_VERSION_4_2)
-		return;
-
-	/* IPA v4.2 does not support hashed tables, so disable them */
-	reg = ipa_reg(ipa, FILT_ROUT_HASH_EN);
-
-	/* IPV6_ROUTER_HASH, IPV6_FILTER_HASH, IPV4_ROUTER_HASH,
-	 * IPV4_FILTER_HASH are all zero.
-	 */
-	iowrite32(0, ipa->reg_virt + reg_offset(reg));
+	return;
 }
 
 static void ipa_idle_indication_cfg(struct ipa *ipa,
 				    u32 enter_idle_debounce_thresh,
 				    bool const_non_idle_enable)
 {
-	const struct reg *reg;
-	u32 val;
-
-	if (ipa->version < IPA_VERSION_3_5_1)
-		return;
-
-	reg = ipa_reg(ipa, IDLE_INDICATION_CFG);
-	val = reg_encode(reg, ENTER_IDLE_DEBOUNCE_THRESH,
-			 enter_idle_debounce_thresh);
-	if (const_non_idle_enable)
-		val |= reg_bit(reg, CONST_NON_IDLE_ENABLE);
-
-	iowrite32(val, ipa->reg_virt + reg_offset(reg));
+	return;
 }
 
 /**
@@ -539,9 +406,6 @@ static void ipa_hardware_config(struct ipa *ipa, const struct ipa_data *data)
  */
 static void ipa_hardware_deconfig(struct ipa *ipa)
 {
-	/* Mostly we just leave things as we set them. */
-	if (ipa->version > IPA_VERSION_2_6L)
-		ipa_hardware_dcd_deconfig(ipa);
 }
 
 /**
@@ -899,14 +763,6 @@ static int ipa_probe(struct platform_device *pdev)
 	 */
 	if (loader == IPA_LOADER_MODEM)
 		goto done;
-
-	if (loader == IPA_LOADER_SELF) {
-		/* The AP is loading GSI firmware; do so now */
-		if (ipa->version > IPA_VERSION_2_6L)
-			ret = ipa_firmware_load(dev);
-		if (ret)
-			goto err_deconfig;
-	} /* Otherwise loader == IPA_LOADER_SKIP */
 
 	/* GSI firmware is loaded; proceed to setup */
 	ret = ipa_setup(ipa);

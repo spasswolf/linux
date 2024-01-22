@@ -104,7 +104,7 @@ int ipa_mem_setup(struct ipa *ipa)
 
 	ipa_cmd_hdr_init_local_add(trans, offset, size, addr);
 
-	if (ipa->version >= IPA_VERSION_3_0 || ipa->version == IPA_VERSION_2_5) {
+	if (ipa->version == IPA_VERSION_2_5) {
 		ipa_mem_zero_region_add(trans, IPA_MEM_MODEM_PROC_CTX);
 		ipa_mem_zero_region_add(trans, IPA_MEM_AP_PROC_CTX);
 	}
@@ -160,9 +160,7 @@ static bool ipa_mem_id_valid(struct ipa *ipa, enum ipa_mem_id mem_id)
 	case IPA_MEM_V6_FILTER_HASHED:
 	case IPA_MEM_V4_ROUTE_HASHED:
 	case IPA_MEM_V6_ROUTE_HASHED:
-		if (version < IPA_VERSION_3_0)
-			return false;
-		break;
+		return false;
 
 	case IPA_MEM_ZIP:
 		if (version != IPA_VERSION_2_6L)
@@ -170,54 +168,37 @@ static bool ipa_mem_id_valid(struct ipa *ipa, enum ipa_mem_id mem_id)
 		break;
 
 	case IPA_MEM_UC_EVENT_RING:
-		if (version != IPA_VERSION_3_5_1 ||
-		    version != IPA_VERSION_4_5 ||
-		    version != IPA_VERSION_4_9)
-			return false;
-		break;
+		return false;
 
 	case IPA_MEM_STATS_TETHERING:
 	case IPA_MEM_STATS_DROP:
-		if (version < IPA_VERSION_4_0)
-			return false;
-		break;
+		return false;
 
 	case IPA_MEM_STATS_V4_FILTER:
 	case IPA_MEM_STATS_V6_FILTER:
 	case IPA_MEM_STATS_V4_ROUTE:
 	case IPA_MEM_STATS_V6_ROUTE:
-		if (version < IPA_VERSION_4_0 || version > IPA_VERSION_4_2)
-			return false;
-		break;
+		return false;
 
 	case IPA_MEM_PDN_CONFIG:
 	case IPA_MEM_STATS_QUOTA_MODEM:
-		if (version < IPA_VERSION_4_2 || version > IPA_VERSION_4_11)
-			return false;
-		break;
+		return false;
 	
 	case IPA_MEM_AP_HEADER:
-		if (version != IPA_VERSION_2_0 && 
-		    (version < IPA_VERSION_4_5 || version > IPA_VERSION_4_11))
+		if (version != IPA_VERSION_2_0)
 			return false;
 		break;
 
 	case IPA_MEM_STATS_QUOTA_AP:
-		if (version < IPA_VERSION_4_5 || version > IPA_VERSION_4_11)
-			return false;
-		break;
+		return false;
 
 	case IPA_MEM_AP_V4_FILTER:
 	case IPA_MEM_AP_V6_FILTER:
-		if (version != IPA_VERSION_5_0)
-			return false;
-		break;
+		return false;
 
 	case IPA_MEM_NAT_TABLE:
 	case IPA_MEM_STATS_FILTER_ROUTE:
-		if (version < IPA_VERSION_4_5)
-			return false;
-		break;
+		return false;
 
 	default:
 		return false;
@@ -247,15 +228,14 @@ static bool ipa_mem_id_required(struct ipa *ipa, enum ipa_mem_id mem_id)
 	case IPA_MEM_V6_FILTER_HASHED:
 	case IPA_MEM_V4_ROUTE_HASHED:
 	case IPA_MEM_V6_ROUTE_HASHED:
-		return ipa->version >= IPA_VERSION_3_0;
+		return false;
 
 	case IPA_MEM_PDN_CONFIG:
 	case IPA_MEM_STATS_QUOTA_MODEM:
-		return ipa->version >= IPA_VERSION_4_0;
+		return false;
 
 	case IPA_MEM_STATS_TETHERING:
-		return ipa->version >= IPA_VERSION_4_0 &&
-			ipa->version != IPA_VERSION_5_0;
+		return false;
 
 	default:
 		return false;		/* Anything else is optional */
@@ -483,7 +463,7 @@ int ipa_mem_zero_modem(struct ipa *ipa)
 	}
 
 	ipa_mem_zero_region_add(trans, IPA_MEM_MODEM_HEADER);
-	if (ipa->version == IPA_VERSION_2_5 || ipa->version >= IPA_VERSION_3_0)
+	if (ipa->version == IPA_VERSION_2_5)
 		ipa_mem_zero_region_add(trans, IPA_MEM_MODEM_PROC_CTX);
 	ipa_mem_zero_region_add(trans, IPA_MEM_MODEM);
 
@@ -628,55 +608,11 @@ static int ipa_smem_init(struct ipa *ipa, u32 item, size_t size)
 	}
 
 	/* IPA v2.6L does not use IOMMU */
-	if (ipa->version <= IPA_VERSION_2_6L)
-		return 0;
-
-	domain = iommu_get_domain_for_dev(dev);
-	if (!domain) {
-		dev_err(dev, "no IOMMU domain found for SMEM\n");
-		return -EINVAL;
-	}
-
-	/* Align the address down and the size up to a page boundary */
-	addr = qcom_smem_virt_to_phys(virt);
-	phys = addr & PAGE_MASK;
-	size = PAGE_ALIGN(size + addr - phys);
-	iova = phys;	/* We just want a direct mapping */
-
-	ret = iommu_map(domain, iova, phys, size, IOMMU_READ | IOMMU_WRITE,
-			GFP_KERNEL);
-	if (ret)
-		return ret;
-
-	ipa->smem_iova = iova;
-	ipa->smem_size = size;
-
 	return 0;
 }
 
 static void ipa_smem_exit(struct ipa *ipa)
 {
-	struct device *dev = &ipa->pdev->dev;
-	struct iommu_domain *domain;
-
-	if (ipa->version <= IPA_VERSION_2_6L)
-		return;
-
-	domain = iommu_get_domain_for_dev(dev);
-	if (domain) {
-		size_t size;
-
-		size = iommu_unmap(domain, ipa->smem_iova, ipa->smem_size);
-		if (size != ipa->smem_size)
-			dev_warn(dev, "unmapped %zu SMEM bytes, expected %zu\n",
-				 size, ipa->smem_size);
-
-	} else {
-		dev_err(dev, "couldn't get IPA IOMMU domain for SMEM\n");
-	}
-
-	ipa->smem_size = 0;
-	ipa->smem_iova = 0;
 }
 
 /* Perform memory region-related initialization */
