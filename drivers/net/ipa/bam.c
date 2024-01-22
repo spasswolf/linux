@@ -59,6 +59,9 @@ int bam_channel_init_one(struct ipa_dma *ipa_dma,
 				(int) PTR_ERR(channel->dma_chan));
 		return PTR_ERR(channel->dma_chan);
 	}
+	printk(KERN_INFO "%s: channel_name=%s dma_chan=%px device=%px\n", __func__, data->channel_name, channel->dma_chan, channel->dma_chan->device);
+	if (channel->dma_chan->device)
+		printk(KERN_INFO "%s: device_issue_pending = %px", __func__, channel->dma_chan->device->device_issue_pending);
 
 	ret = ipa_dma_channel_trans_init(ipa_dma, data->channel_id);
 	if (ret)
@@ -102,6 +105,7 @@ int bam_channel_init(struct ipa_dma *ipa_dma, u32 count,
 {
 	int ret = 0;
 	u32 i;
+	printk(KERN_INFO "%s\n", __func__);
 
 	for (i = 0; i < count; ++i) {
 		bool command = i == IPA_ENDPOINT_AP_COMMAND_TX;
@@ -443,16 +447,27 @@ static void bam_trans_commit(struct ipa_dma_trans *trans, bool unused)
 		struct dma_async_tx_descriptor *desc;
 
 		byte_count += len;
-		if (cmd_opcode)
+		if (channel->toward_ipa)
+			printk(KERN_INFO "%s: byte_count = 0x%x\n", __func__, opcode);
+		if (cmd_opcode) {
 			opcode = *cmd_opcode++;
+			if (channel->toward_ipa)
+				printk(KERN_INFO "%s: opcode = 0x%x\n", __func__, opcode);
+		}
 
 		if (opcode != IPA_CMD_NONE) {
 			len = opcode;
 			dma_flags |= DMA_PREP_IMM_CMD;
 		}
 
-		if (last_tre)
+		if (last_tre) {
 			dma_flags |= DMA_PREP_INTERRUPT;
+			if (channel->toward_ipa)
+				printk(KERN_INFO "%s: %d\n", __func__, __LINE__);
+		}
+
+		if (channel->toward_ipa)
+			printk(KERN_INFO "%s: name=%s addr=0x%llx len=0x%x dma_flags=0x%x\n", __func__, channel->dma_chan->name, addr, len, dma_flags);
 
 		desc = dmaengine_prep_slave_single(channel->dma_chan, addr, len,
 				direction, dma_flags);
@@ -460,6 +475,8 @@ static void bam_trans_commit(struct ipa_dma_trans *trans, bool unused)
 		if (last_tre) {
 			desc->callback = bam_trans_callback;
 			desc->callback_param = trans;
+			if (channel->toward_ipa)
+				printk(KERN_INFO "%s: %d\n", __func__, __LINE__);
 		}
 
 		desc->cookie = dmaengine_submit(desc);
@@ -478,6 +495,7 @@ static void bam_trans_commit(struct ipa_dma_trans *trans, bool unused)
 		trans->byte_count = channel->byte_count;
 		channel->trans_count++;
 		channel->byte_count += byte_count;
+		printk(KERN_INFO "trans->len=0x%x trans->trans_count=0x%llx trans->byte_count=0x%llx\n", trans->len, trans->trans_count, trans->byte_count);
 	}
 
 	ipa_dma_trans_move_pending(trans);
@@ -507,6 +525,7 @@ int bam_init(struct ipa_dma *ipa_dma, struct platform_device *pdev,
 
 	init_dummy_netdev(&ipa_dma->dummy_dev);
 
+	printk(KERN_INFO "%s\n", __func__);
 	ret = bam_channel_init(ipa_dma, count, data);
 	if (ret)
 		return ret;

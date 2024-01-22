@@ -416,6 +416,8 @@ static inline void __iomem *bam_addr(struct bam_device *bdev, u32 pipe,
 		enum bam_reg reg)
 {
 	const struct reg_offset_data r = bdev->layout[reg];
+	//printk(KERN_INFO "%s: bdev->regs=%px r.base_offset=0x%x r.pipe_mult=0x%x r.evnt_mult=0x%x pipe=0x%x r.ee_mult=0x%x bdev->ee=0x%x",
+	//		__func__, bdev->regs, r.base_offset, r.pipe_mult, r.evnt_mult, pipe, r.ee_mult, bdev->ee);
 
 	return bdev->regs + r.base_offset +
 		r.pipe_mult * pipe +
@@ -1097,6 +1099,7 @@ static void bam_start_dma(struct bam_chan *bchan)
 	int ret;
 	unsigned int avail;
 	struct dmaengine_desc_callback cb;
+	printk(KERN_INFO "%s: %d\n", __func__, __LINE__);
 
 	lockdep_assert_held(&bchan->vc.lock);
 
@@ -1172,12 +1175,15 @@ static void bam_start_dma(struct bam_chan *bchan)
 		bchan->tail %= MAX_DESCRIPTORS;
 		list_add_tail(&async_desc->desc_node, &bchan->desc_list);
 	}
+	printk(KERN_INFO "%s: %d\n", __func__, __LINE__);
 
 	/* ensure descriptor writes and dma start not reordered */
 	wmb();
+	printk(KERN_INFO "%s: %d: bam_addr = %px bchan->tail = %hu\n", __func__, __LINE__, bam_addr(bdev, bchan->id, BAM_P_EVNT_REG), bchan->tail);
 	writel_relaxed(bchan->tail * sizeof(struct bam_desc_hw),
 			bam_addr(bdev, bchan->id, BAM_P_EVNT_REG));
 
+	printk(KERN_INFO "%s: %d\n", __func__, __LINE__);
 	pm_runtime_mark_last_busy(bdev->dev);
 	pm_runtime_put_autosuspend(bdev->dev);
 }
@@ -1217,6 +1223,7 @@ static void bam_issue_pending(struct dma_chan *chan)
 {
 	struct bam_chan *bchan = to_bam_chan(chan);
 	unsigned long flags;
+	printk(KERN_INFO "%s 0: chan->name = %s\n", __func__, chan->name);
 
 	spin_lock_irqsave(&bchan->vc.lock, flags);
 
@@ -1224,6 +1231,7 @@ static void bam_issue_pending(struct dma_chan *chan)
 	if (vchan_issue_pending(&bchan->vc) && !IS_BUSY(bchan))
 		bam_start_dma(bchan);
 
+	printk(KERN_INFO "%s 1: chan->name = %s\n", __func__, chan->name);
 	spin_unlock_irqrestore(&bchan->vc.lock, flags);
 }
 

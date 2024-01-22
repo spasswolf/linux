@@ -46,7 +46,8 @@ static const struct ipa_dma_endpoint_data ipa_endpoint_data[] = {
 				.aggregation	= true,
 				.status_enable	= true,
 				.rx = {
-					.buffer_size	= 8192,
+					.buffer_size	= 2048,
+					//.buffer_size	= 8192,
 					// 	.pad_align	= ilog2(sizeof(u32)),
 					.aggr_time_limit = 500,
 				},
