@@ -32,19 +32,6 @@ void ipa_gsi_trans_complete(struct ipa_dma_trans *trans);
 void ipa_gsi_trans_release(struct ipa_dma_trans *trans);
 
 /**
- * ipa_gsi_channel_tx_queued() - GSI queued to hardware notification
- * @ipa_dma:	IPA DMA pointer
- * @channel_id:	Channel number
- * @count:	Number of transactions queued
- * @byte_count:	Number of bytes to transfer represented by transactions
- *
- * This called from the GSI layer to notify the IPA layer that some
- * number of transactions have been queued to hardware for execution.
- */
-void ipa_gsi_channel_tx_queued(struct ipa_dma *ipa_dma, u32 channel_id, u32 count,
-			       u32 byte_count);
-
-/**
  * ipa_gsi_channel_tx_completed() - GSI transaction completion callback
  * @ipa_dma:	IPA DMA pointer
  * @channel_id:	Channel number

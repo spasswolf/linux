@@ -129,7 +129,6 @@ enum ipa_status_field_id {
 static u32 ipa_status_extract(struct ipa *ipa, const void *data,
 			      enum ipa_status_field_id field)
 {
-	enum ipa_version version = ipa->version;
 	const __le32 *word = data;
 
 	switch (field) {
@@ -603,8 +602,6 @@ static void ipa_endpoint_init_cfg(struct ipa_endpoint *endpoint)
 	reg = ipa_reg(ipa, ENDP_INIT_CFG);
 	/* FRAG_OFFLOAD_EN is 0 */
 	if (endpoint->config.checksum) {
-		enum ipa_version version = ipa->version;
-
 		if (endpoint->toward_ipa) {
 			u32 off;
 
@@ -828,41 +825,6 @@ static void ipa_endpoint_init_mode(struct ipa_endpoint *endpoint)
 	iowrite32(val, ipa->reg_virt + offset);
 }
 
-/* For IPA v4.5+, times are expressed using Qtime.  A time is represented
- * at one of several available granularities, which are configured in
- * ipa_qtime_config().  Three (or, starting with IPA v5.0, four) pulse
- * generators are set up with different "tick" periods.  A Qtime value
- * encodes a tick count along with an indication of a pulse generator
- * (which has a fixed tick period).  Two pulse generators are always
- * available to the AP; a third is available starting with IPA v5.0.
- * This function determines which pulse generator most accurately
- * represents the time period provided, and returns the tick count to
- * use to represent that time.
- */
-static u32
-ipa_qtime_val(struct ipa *ipa, u32 microseconds, u32 max, u32 *select)
-{
-	u32 which = 0;
-	u32 ticks;
-
-	/* Pulse generator 0 has 100 microsecond granularity */
-	ticks = DIV_ROUND_CLOSEST(microseconds, 100);
-	if (ticks <= max)
-		goto out;
-
-	/* Pulse generator 1 has millisecond granularity */
-	which = 1;
-	ticks = DIV_ROUND_CLOSEST(microseconds, 1000);
-	if (ticks <= max)
-		goto out;
-
-	WARN_ON(ticks > max);
-out:
-	*select = which;
-
-	return ticks;
-}
-
 /* Encode the aggregation timer limit (microseconds) based on IPA version */
 static u32 aggr_time_limit_encode(struct ipa *ipa, const struct reg *reg,
 				  u32 microseconds)
@@ -939,12 +901,8 @@ static void ipa_endpoint_init_aggr(struct ipa_endpoint *endpoint)
 static u32 hol_block_timer_encode(struct ipa *ipa, const struct reg *reg,
 				  u32 microseconds)
 {
-	u32 width;
-	u32 scale;
 	u64 ticks;
 	u64 rate;
-	u32 high;
-	u32 val;
 
 	if (!microseconds)
 		return 0;	/* Nothing to compute if timer period is 0 */
@@ -1034,42 +992,6 @@ static void ipa_endpoint_init_deaggr(struct ipa_endpoint *endpoint)
 	/* PACKET_OFFSET_VALID is 0 */
 	/* PACKET_OFFSET_LOCATION is ignored (not valid) */
 	/* MAX_PACKET_LEN is 0 (not enforced) */
-
-	iowrite32(val, ipa->reg_virt + reg_n_offset(reg, endpoint_id));
-}
-
-static void ipa_endpoint_init_rsrc_grp(struct ipa_endpoint *endpoint)
-{
-	u32 resource_group = endpoint->config.resource_group;
-	u32 endpoint_id = endpoint->endpoint_id;
-	struct ipa *ipa = endpoint->ipa;
-	const struct reg *reg;
-	u32 val;
-
-	reg = ipa_reg(ipa, ENDP_INIT_RSRC_GRP);
-	val = reg_encode(reg, ENDP_RSRC_GRP, resource_group);
-
-	iowrite32(val, ipa->reg_virt + reg_n_offset(reg, endpoint_id));
-}
-
-static void ipa_endpoint_init_seq(struct ipa_endpoint *endpoint)
-{
-	u32 endpoint_id = endpoint->endpoint_id;
-	struct ipa *ipa = endpoint->ipa;
-	const struct reg *reg;
-	u32 val;
-
-	if (!endpoint->toward_ipa)
-		return;		/* Register not valid for RX endpoints */
-
-	reg = ipa_reg(ipa, ENDP_INIT_SEQ);
-
-	/* Low-order byte configures primary packet processing */
-	val = reg_encode(reg, SEQ_TYPE, endpoint->config.tx.seq_type);
-
-	/* Second byte (if supported) configures replicated packet processing */
-	val |= reg_encode(reg, SEQ_REP_TYPE,
-			  endpoint->config.tx.seq_rep_type);
 
 	iowrite32(val, ipa->reg_virt + reg_n_offset(reg, endpoint_id));
 }
@@ -1831,14 +1753,7 @@ void ipa_endpoint_deconfig(struct ipa *ipa)
 
 int ipa_endpoint_config(struct ipa *ipa)
 {
-	struct device *dev = &ipa->pdev->dev;
 	const struct reg *reg;
-	u32 endpoint_id;
-	u32 hw_limit;
-	u32 tx_count;
-	u32 rx_count;
-	u32 rx_base;
-	u32 limit;
 	u32 val;
 
 	/* Prior to IPA v3.5, the FLAVOR_0 register was not supported.

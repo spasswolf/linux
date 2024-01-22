@@ -26,17 +26,6 @@ void ipa_gsi_trans_release(struct ipa_dma_trans *trans)
 	ipa_endpoint_trans_release(ipa->channel_map[trans->channel_id], trans);
 }
 
-void ipa_gsi_channel_tx_queued(struct ipa_dma *ipa_dma, u32 channel_id, u32 count,
-			       u32 byte_count)
-{
-	struct ipa *ipa = container_of(ipa_dma, struct ipa, ipa_dma);
-	struct ipa_endpoint *endpoint;
-
-	endpoint = ipa->channel_map[channel_id];
-	if (endpoint->netdev)
-		netdev_sent_queue(endpoint->netdev, byte_count);
-}
-
 void ipa_gsi_channel_tx_completed(struct ipa_dma *ipa_dma, u32 channel_id, u32 count,
 				  u32 byte_count)
 {
