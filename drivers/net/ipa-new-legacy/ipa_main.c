@@ -23,7 +23,6 @@
 #include "ipa_power.h"
 #include "ipa_data.h"
 #include "ipa_endpoint.h"
-#include "ipa_resource.h"
 #include "ipa_cmd.h"
 #include "ipa_reg.h"
 #include "ipa_mem.h"
@@ -300,11 +299,6 @@ static int ipa_config(struct ipa *ipa, const struct ipa_data *data)
 		goto err_uc_deconfig;
 
 	ipa_table_config(ipa);		/* No deconfig required */
-
-	/* Assign resource limitation to each group; no deconfig required */
-	ret = ipa_resource_config(ipa, data->resource_data);
-	if (ret)
-		goto err_endpoint_deconfig;
 
 	ret = ipa_modem_config(ipa);
 	if (ret)

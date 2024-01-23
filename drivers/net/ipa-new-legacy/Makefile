@@ -12,8 +12,7 @@ ipa-new-legacy-y	:=	ipa_main.o ipa_power.o ipa_reg.o ipa_mem.o \
 				ipa_table.o ipa_interrupt.o bam.o \
 				ipa_dma_trans.o ipa_gsi.o \
 				ipa_uc.o ipa_endpoint.o ipa_cmd.o ipa_modem.o \
-				ipa_resource.o ipa_qmi.o ipa_qmi_msg.o \
-				ipa_sysfs.o
+				ipa_qmi.o ipa_qmi_msg.o ipa_sysfs.o
 
 ipa-new-legacy-y	+=	$(IPA_REG_VERSIONS:%=reg/ipa_reg-v%.o)
 
