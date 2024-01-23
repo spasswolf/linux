@@ -386,11 +386,7 @@ static int apcs_msm8953_icc_init(struct device *dev,
 	if (IS_ERR(iprov))
 		return PTR_ERR(iprov);
 
-	ret = devm_add_action_or_reset(dev, apcs_msm8953_icc_deinit, iprov);
-	if (ret)
-		apcs_msm8953_icc_deinit(iprov);
-
-	return ret;
+	return devm_add_action_or_reset(dev, apcs_msm8953_icc_deinit, iprov);
 }
 
 #define apcs_icc_sync_state icc_sync_state
