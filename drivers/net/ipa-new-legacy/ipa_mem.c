@@ -559,10 +559,6 @@ static int ipa_smem_init(struct ipa *ipa, u32 item, size_t size)
 	return 0;
 }
 
-static void ipa_smem_exit(struct ipa *ipa)
-{
-}
-
 /* Perform memory region-related initialization */
 int ipa_mem_init(struct ipa *ipa, const struct ipa_mem_data *mem_data)
 {
@@ -631,7 +627,6 @@ err_unmap:
 /* Inverse of ipa_mem_init() */
 void ipa_mem_exit(struct ipa *ipa)
 {
-	ipa_smem_exit(ipa);
 	ipa_imem_exit(ipa);
 	memunmap(ipa->mem_virt);
 }

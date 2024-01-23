@@ -195,20 +195,6 @@ int ipa_dma_trans_page_add(struct ipa_dma_trans *trans, struct page *page, u32 s
 int ipa_dma_trans_skb_add(struct ipa_dma_trans *trans, struct sk_buff *skb);
 
 /**
- * ipa_dma_trans_commit() - Commit a DMA transaction
- * @trans:	Transaction to commit
- * @ring_db:	Whether to tell the hardware about these queued transfers
- */
-void ipa_dma_trans_commit(struct ipa_dma_trans *trans, bool ring_db);
-
-/**
- * ipa_dma_trans_commit_wait() - Commit a GSI transaction and wait for it
- *			     to complete
- * @trans:	Transaction to commit
- */
-void ipa_dma_trans_commit_wait(struct ipa_dma_trans *trans);
-
-/**
  * ipa_dma_trans_read_byte() - Issue a single byte read TRE on a channel
  * @ipa_dma:	IPA DMA pointer
  * @channel_id:	Channel on which to read a byte
