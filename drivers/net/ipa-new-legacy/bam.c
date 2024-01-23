@@ -110,7 +110,7 @@ int bam_channel_init(struct ipa_dma *ipa_dma, u32 count,
 	for (i = 0; i < count; ++i) {
 		bool command = i == IPA_ENDPOINT_AP_COMMAND_TX;
 
-		if (!data[i].channel_name || data[i].ee_id == DMA_EE_MODEM)
+		if (!data[i].channel_name || data[i].ee_id == IPA_EE_MODEM)
 			continue;
 
 		ret = bam_channel_init_one(ipa_dma, &data[i], command);

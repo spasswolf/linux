@@ -389,7 +389,7 @@ static void ipa_validate_build(void)
 	BUILD_BUG_ON(!IS_ENABLED(CONFIG_64BIT) && sizeof(size_t) != 4);
 
 	/* Code assumes the EE ID for the AP is 0 (zeroed structure field) */
-	BUILD_BUG_ON(DMA_EE_AP != 0);
+	BUILD_BUG_ON(IPA_EE_AP != 0);
 
 	/* There's no point if we have no channels or event rings */
 	BUILD_BUG_ON(!GSI_CHANNEL_COUNT_MAX);

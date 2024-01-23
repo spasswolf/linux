@@ -232,7 +232,7 @@ ipa_filter_reset_table(struct ipa *ipa, bool hashed, bool ipv6, bool modem)
 		return -EBUSY;
 	}
 
-	ee_id = modem ? DMA_EE_MODEM : DMA_EE_AP;
+	ee_id = modem ? IPA_EE_MODEM : IPA_EE_AP;
 	while (ep_mask) {
 		u32 endpoint_id = __ffs(ep_mask);
 		struct ipa_endpoint *endpoint;

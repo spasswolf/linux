@@ -160,13 +160,13 @@ static const u32 reg_endp_status_fmask[] = {
 
 REG_STRIDE_FIELDS(ENDP_STATUS, endp_status, 0x000004c0, 0x0004);
 
-REG(IPA_IRQ_STTS, ipa_irq_stts, 0x00001008 + 0x1000 * DMA_EE_AP);
+REG(IPA_IRQ_STTS, ipa_irq_stts, 0x00001008 + 0x1000 * IPA_EE_AP);
 
-REG(IPA_IRQ_EN, ipa_irq_en, 0x0000100c + 0x1000 * DMA_EE_AP);
+REG(IPA_IRQ_EN, ipa_irq_en, 0x0000100c + 0x1000 * IPA_EE_AP);
 
-REG(IPA_IRQ_CLR, ipa_irq_clr, 0x00001010 + 0x1000 * DMA_EE_AP);
+REG(IPA_IRQ_CLR, ipa_irq_clr, 0x00001010 + 0x1000 * IPA_EE_AP);
 
-REG(IRQ_SUSPEND_INFO, irq_suspend_info, 0x00001098 + 0x1000 * DMA_EE_AP);
+REG(IRQ_SUSPEND_INFO, irq_suspend_info, 0x00001098 + 0x1000 * IPA_EE_AP);
 
 static const struct reg *reg_array[] = {
 	[COMP_CFG]			= &reg_comp_cfg,

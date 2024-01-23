@@ -14,7 +14,7 @@
 /* Endpoint configuration for the IPA v2 hardware. */
 static const struct ipa_dma_endpoint_data ipa_endpoint_data[] = {
 	[IPA_ENDPOINT_AP_COMMAND_TX] = {
-		.ee_id		= DMA_EE_AP,
+		.ee_id		= IPA_EE_AP,
 		.channel_id	= 3,
 		.endpoint_id	= 3,
 		.channel_name	= "cmd_tx",
@@ -32,7 +32,7 @@ static const struct ipa_dma_endpoint_data ipa_endpoint_data[] = {
 		},
 	},
 	[IPA_ENDPOINT_AP_LAN_RX] = {
-		.ee_id		= DMA_EE_AP,
+		.ee_id		= IPA_EE_AP,
 		.channel_id	= 2,
 		.endpoint_id	= 2,
 		.channel_name	= "ap_lan_rx",
@@ -53,7 +53,7 @@ static const struct ipa_dma_endpoint_data ipa_endpoint_data[] = {
 		},
 	},
 	[IPA_ENDPOINT_AP_MODEM_TX] = {
-		.ee_id		= DMA_EE_AP,
+		.ee_id		= IPA_EE_AP,
 		.channel_id	= 4,
 		.endpoint_id	= 4,
 		.channel_name	= "ap_modem_tx",
@@ -75,7 +75,7 @@ static const struct ipa_dma_endpoint_data ipa_endpoint_data[] = {
 		},
 	},
 	[IPA_ENDPOINT_AP_MODEM_RX] = {
-		.ee_id		= DMA_EE_AP,
+		.ee_id		= IPA_EE_AP,
 		.channel_id	= 5,
 		.endpoint_id	= 5,
 		.channel_name	= "ap_modem_rx",
@@ -98,28 +98,28 @@ static const struct ipa_dma_endpoint_data ipa_endpoint_data[] = {
 		},
 	},
 	[IPA_ENDPOINT_MODEM_LAN_TX] = {
-		.ee_id		= DMA_EE_MODEM,
+		.ee_id		= IPA_EE_MODEM,
 		.channel_id	= 6,
 		.endpoint_id	= 6,
 		.channel_name	= "modem_lan_tx",
 		.toward_ipa	= true,
 	},
 	[IPA_ENDPOINT_MODEM_COMMAND_TX] = {
-		.ee_id		= DMA_EE_MODEM,
+		.ee_id		= IPA_EE_MODEM,
 		.channel_id	= 7,
 		.endpoint_id	= 7,
 		.channel_name	= "modem_cmd_tx",
 		.toward_ipa	= true,
 	},
 	[IPA_ENDPOINT_MODEM_LAN_RX] = {
-		.ee_id		= DMA_EE_MODEM,
+		.ee_id		= IPA_EE_MODEM,
 		.channel_id	= 8,
 		.endpoint_id	= 8,
 		.channel_name	= "modem_lan_rx",
 		.toward_ipa	= false,
 	},
 	[IPA_ENDPOINT_MODEM_AP_RX] = {
-		.ee_id		= DMA_EE_MODEM,
+		.ee_id		= IPA_EE_MODEM,
 		.channel_id	= 9,
 		.endpoint_id	= 9,
 		.channel_name	= "modem_ap_rx",

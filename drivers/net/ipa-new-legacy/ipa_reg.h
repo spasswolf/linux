@@ -101,7 +101,7 @@ enum ipa_reg_id {
 	ENDP_FILTER_ROUTER_HSH_CFG,	/* IPA v3.0+, Not IPA v4.2 */
 	ENDP_FILTER_CACHE_CFG,				/* IPA v5.0+ */
 	ENDP_ROUTER_CACHE_CFG,				/* IPA v5.0+ */
-	/* The IRQ registers that follow are only used for DMA_EE_AP */
+	/* The IRQ registers that follow are only used for IPA_EE_AP */
 	IPA_IRQ_STTS,
 	IPA_IRQ_EN,
 	IPA_IRQ_CLR,

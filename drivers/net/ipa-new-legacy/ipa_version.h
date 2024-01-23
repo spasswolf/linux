@@ -67,10 +67,10 @@ static inline bool ipa_version_supported(enum ipa_version version)
 
 /* Execution environment IDs */
 enum dma_ee_id {
-	DMA_EE_AP		= 0x0,
-	DMA_EE_MODEM		= 0x1,
-	DMA_EE_UC		= 0x2,
-	DMA_EE_TZ		= 0x3,
+	IPA_EE_AP		= 0x0,
+	IPA_EE_MODEM		= 0x1,
+	IPA_EE_UC		= 0x2,
+	IPA_EE_TZ		= 0x3,
 };
 
 #endif /* _IPA_VERSION_H_ */
