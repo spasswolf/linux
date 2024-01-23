@@ -378,10 +378,8 @@ static int cpr_init_domain(struct cpr_drv *drv, unsigned int index)
 		return ret;
 
 	ret = devm_add_action_or_reset(dev, cpr_remove_domain, &cpd->pd);
-	if (ret) {
-		cpr_remove_domain(&cpd->pd);
+	if (ret)
 		return ret;
-	}
 
 	ret = nvmem_cell_read_u8(dev, "speed_bin", &speed_bin);
 	if (ret)
