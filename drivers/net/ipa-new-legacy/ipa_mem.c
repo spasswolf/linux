@@ -118,7 +118,7 @@ int ipa_mem_setup(struct ipa *ipa)
 	trans->ipa_dma->ops->trans_commit_wait(trans);
 
 	/* On IPA version <=2.6L (except 2.5) there is no PROC_CTX.  */
-	if (ipa->version != IPA_VERSION_2_5 && ipa->version <= IPA_VERSION_2_6L)
+	if (ipa->version != IPA_VERSION_2_5)
 		return 0;
 
 	/* Tell the hardware where the processing context area is located */
@@ -156,49 +156,15 @@ static bool ipa_mem_id_valid(struct ipa *ipa, enum ipa_mem_id mem_id)
 			return false;
 		break;
 
-	case IPA_MEM_V4_FILTER_HASHED:
-	case IPA_MEM_V6_FILTER_HASHED:
-	case IPA_MEM_V4_ROUTE_HASHED:
-	case IPA_MEM_V6_ROUTE_HASHED:
-		return false;
-
 	case IPA_MEM_ZIP:
 		if (version != IPA_VERSION_2_6L)
 			return false;
 		break;
 
-	case IPA_MEM_UC_EVENT_RING:
-		return false;
-
-	case IPA_MEM_STATS_TETHERING:
-	case IPA_MEM_STATS_DROP:
-		return false;
-
-	case IPA_MEM_STATS_V4_FILTER:
-	case IPA_MEM_STATS_V6_FILTER:
-	case IPA_MEM_STATS_V4_ROUTE:
-	case IPA_MEM_STATS_V6_ROUTE:
-		return false;
-
-	case IPA_MEM_PDN_CONFIG:
-	case IPA_MEM_STATS_QUOTA_MODEM:
-		return false;
-	
 	case IPA_MEM_AP_HEADER:
 		if (version != IPA_VERSION_2_0)
 			return false;
 		break;
-
-	case IPA_MEM_STATS_QUOTA_AP:
-		return false;
-
-	case IPA_MEM_AP_V4_FILTER:
-	case IPA_MEM_AP_V6_FILTER:
-		return false;
-
-	case IPA_MEM_NAT_TABLE:
-	case IPA_MEM_STATS_FILTER_ROUTE:
-		return false;
 
 	default:
 		return false;
@@ -223,19 +189,6 @@ static bool ipa_mem_id_required(struct ipa *ipa, enum ipa_mem_id mem_id)
 	case IPA_MEM_MODEM_PROC_CTX:
 	case IPA_MEM_AP_PROC_CTX:
 		return ipa->version != IPA_VERSION_2_6L;
-
-	case IPA_MEM_V4_FILTER_HASHED:
-	case IPA_MEM_V6_FILTER_HASHED:
-	case IPA_MEM_V4_ROUTE_HASHED:
-	case IPA_MEM_V6_ROUTE_HASHED:
-		return false;
-
-	case IPA_MEM_PDN_CONFIG:
-	case IPA_MEM_STATS_QUOTA_MODEM:
-		return false;
-
-	case IPA_MEM_STATS_TETHERING:
-		return false;
 
 	default:
 		return false;		/* Anything else is optional */
@@ -264,13 +217,12 @@ static bool ipa_mem_valid_one(struct ipa *ipa, const struct ipa_mem *mem)
 	 * Sizes must be a multiple of 4 for IPA v2.
 	 * Other than modem memory, sizes must be a multiple of 8 for IPA v3.
 	 */
-	size_multiple = mem_id == IPA_MEM_MODEM ||
-		ipa->version <= IPA_VERSION_2_6L ? 4 : 8;
+	size_multiple = 4;
 	/*
 	 * Offset should be 4-byte aligned for IPA v2, and 8-byte aligned
 	 * for IPA v3.
 	 */
-	offset_alignment = ipa->version <= IPA_VERSION_2_6L ? 4 : 8;
+	offset_alignment = 4;
 	if (mem->size % size_multiple)
 		dev_err(dev, "region %u size not a multiple of %u bytes\n",
 			mem_id, size_multiple);

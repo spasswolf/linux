@@ -20,26 +20,11 @@ struct ipa;
 bool ipa_filtered_valid(struct ipa *ipa, u64 filtered);
 
 /**
- * ipa_table_hash_support() - Return true if hashed tables are supported
- * @ipa:	IPA pointer
- */
-static inline bool ipa_table_hash_support(struct ipa *ipa)
-{
-	return false;
-}
-
-/**
  * ipa_table_reset() - Reset filter and route tables entries to "none"
  * @ipa:	IPA pointer
  * @modem:	Whether to reset modem or AP entries
  */
 void ipa_table_reset(struct ipa *ipa, bool modem);
-
-/**
- * ipa_table_hash_flush() - Synchronize hashed filter and route updates
- * @ipa:	IPA pointer
- */
-int ipa_table_hash_flush(struct ipa *ipa);
 
 /**
  * ipa_table_setup() - Set up filter and route tables

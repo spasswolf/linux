@@ -45,8 +45,8 @@ enum pipeline_clear_options {
 /* IPA_CMD_IP_V{4,6}_{FILTER,ROUTING}_INIT */
 
 struct ipa_cmd_hw_ip_fltrt_init {
-		__le32 nhash_rules_addr;
-		__le32 flags;
+	__le32 nhash_rules_addr;
+	__le32 flags;
 };
 
 /* Field masks for ipa_cmd_hw_ip_fltrt_init structure fields */
@@ -359,16 +359,6 @@ void ipa_cmd_table_init_add(struct ipa_dma_trans *trans,
 
 	val = u64_encode_bits(offset, IP_V2_IPV6_FLTRT_FLAGS_ADDR_FMASK);
 	val |= u64_encode_bits(size, IP_V2_IPV6_FLTRT_FLAGS_SIZE_FMASK);
-
-	/* The hash table offset and address are zero if its size is 0 */
-	if (hash_size) {
-		/* Record the hash table offset and size */
-		hash_offset += ipa->mem_offset;
-		val |= u64_encode_bits(hash_offset,
-				       IP_FLTRT_FLAGS_HASH_ADDR_FMASK);
-		val |= u64_encode_bits(hash_size,
-				       IP_FLTRT_FLAGS_HASH_SIZE_FMASK);
-	}
 
 	cmd_payload = ipa_cmd_payload_alloc(ipa, &payload_addr);
 	payload = &cmd_payload->table_init;

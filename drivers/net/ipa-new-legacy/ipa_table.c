@@ -263,15 +263,7 @@ static int ipa_filter_reset(struct ipa *ipa, bool modem)
 	if (ret)
 		return ret;
 
-	ret = ipa_filter_reset_table(ipa, false, true, modem);
-	if (ret || !ipa_table_hash_support(ipa))
-		return ret;
-
-	ret = ipa_filter_reset_table(ipa, true, false, modem);
-	if (ret)
-		return ret;
-
-	return ipa_filter_reset_table(ipa, true, true, modem);
+	return ipa_filter_reset_table(ipa, false, true, modem);
 }
 
 /* The AP routes and modem routes are each contiguous within the
@@ -280,13 +272,12 @@ static int ipa_filter_reset(struct ipa *ipa, bool modem)
  * */
 static int ipa_route_reset(struct ipa *ipa, bool modem)
 {
-	bool hash_support = ipa_table_hash_support(ipa);
 	u32 modem_route_count = ipa->modem_route_count;
 	struct ipa_dma_trans *trans;
 	u16 first;
 	u16 count;
 
-	trans = ipa_cmd_trans_alloc(ipa, hash_support ? 4 : 2);
+	trans = ipa_cmd_trans_alloc(ipa, 2);
 	if (!trans) {
 		dev_err(&ipa->pdev->dev,
 			"no transaction for %s route reset\n",
@@ -304,11 +295,6 @@ static int ipa_route_reset(struct ipa *ipa, bool modem)
 
 	ipa_table_reset_add(trans, false, false, false, first, count);
 	ipa_table_reset_add(trans, false, false, true, first, count);
-
-	if (hash_support) {
-		ipa_table_reset_add(trans, false, true, false, first, count);
-		ipa_table_reset_add(trans, false, true, true, first, count);
-	}
 
 	trans->ipa_dma->ops->trans_commit_wait(trans);
 
@@ -333,35 +319,6 @@ void ipa_table_reset(struct ipa *ipa, bool modem)
 	if (ret)
 		dev_err(dev, "error %d resetting route table for %s\n",
 				ret, ee_name);
-}
-
-int ipa_table_hash_flush(struct ipa *ipa)
-{
-	struct ipa_dma_trans *trans;
-	const struct reg *reg;
-	u32 val;
-
-	if (!ipa_table_hash_support(ipa))
-		return 0;
-
-	trans = ipa_cmd_trans_alloc(ipa, 1);
-	if (!trans) {
-		dev_err(&ipa->pdev->dev, "no transaction for hash flush\n");
-		return -EBUSY;
-	}
-
-	reg = ipa_reg(ipa, FILT_ROUT_HASH_FLUSH);
-
-	val = reg_bit(reg, IPV6_ROUTER_HASH);
-	val |= reg_bit(reg, IPV6_FILTER_HASH);
-	val |= reg_bit(reg, IPV4_ROUTER_HASH);
-	val |= reg_bit(reg, IPV4_FILTER_HASH);
-
-	ipa_cmd_register_write_add(trans, reg_offset(reg), val, val, false);
-
-	trans->ipa_dma->ops->trans_commit_wait(trans);
-
-	return 0;
 }
 
 static void ipa_table_init_add(struct ipa_dma_trans *trans, bool filter, bool ipv6)
@@ -500,27 +457,6 @@ static void ipa_filter_tuple_zero(struct ipa_endpoint *endpoint)
 	iowrite32(val, endpoint->ipa->reg_virt + offset);
 }
 
-/* Configure a hashed filter table; there is no ipa_filter_deconfig() */
-static void ipa_filter_config(struct ipa *ipa, bool modem)
-{
-	enum dma_ee_id ee_id = modem ? DMA_EE_MODEM : DMA_EE_AP;
-	u64 ep_mask = ipa->filtered;
-
-	if (!ipa_table_hash_support(ipa))
-		return;
-
-	while (ep_mask) {
-		u32 endpoint_id = __ffs(ep_mask);
-		struct ipa_endpoint *endpoint;
-
-		ep_mask ^= BIT(endpoint_id);
-
-		endpoint = &ipa->endpoint[endpoint_id];
-		if (endpoint->ee_id == ee_id)
-			ipa_filter_tuple_zero(endpoint);
-	}
-}
-
 static bool ipa_route_id_modem(struct ipa *ipa, u32 route_id)
 {
 	return route_id < ipa->modem_route_count;
@@ -550,26 +486,11 @@ static void ipa_route_tuple_zero(struct ipa *ipa, u32 route_id)
 	iowrite32(val, ipa->reg_virt + offset);
 }
 
-/* Configure a hashed route table; there is no ipa_route_deconfig() */
-static void ipa_route_config(struct ipa *ipa, bool modem)
-{
-	u32 route_id;
-
-	if (!ipa_table_hash_support(ipa))
-		return;
-
-	for (route_id = 0; route_id < ipa->route_count; route_id++)
-		if (ipa_route_id_modem(ipa, route_id) == modem)
-			ipa_route_tuple_zero(ipa, route_id);
-}
-
 /* Configure a filter and route tables; there is no ipa_table_deconfig() */
 void ipa_table_config(struct ipa *ipa)
 {
-	ipa_filter_config(ipa, false);
-	ipa_filter_config(ipa, true);
-	ipa_route_config(ipa, false);
-	ipa_route_config(ipa, true);
+	/* FIXME: Do we need an unhashed filter table? */
+	/* FIXME: Do we need an unhashed route table? */
 }
 
 /* Verify the sizes of all IPA table filter or routing table memory regions
@@ -577,7 +498,6 @@ void ipa_table_config(struct ipa *ipa)
  */
 bool ipa_table_mem_valid(struct ipa *ipa, bool filter)
 {
-	bool hash_support = ipa_table_hash_support(ipa);
 	const size_t entry_size = sizeof (__le32);
 	const struct ipa_mem *mem_hashed;
 	const struct ipa_mem *mem_ipv4;
@@ -633,23 +553,13 @@ bool ipa_table_mem_valid(struct ipa *ipa, bool filter)
 	 * be defined).
 	 */
 	mem_hashed = ipa_table_mem(ipa, filter, true, false);
-	if (hash_support) {
-		if (!mem_hashed || mem_hashed->size != mem_ipv4->size)
-			return false;
-	} else {
-		if (mem_hashed && mem_hashed->size)
-			return false;
-	}
+	if (mem_hashed && mem_hashed->size)
+		return false;
 
 	/* Same check for IPv6 tables */
 	mem_hashed = ipa_table_mem(ipa, filter, true, true);
-	if (hash_support) {
-		if (!mem_hashed || mem_hashed->size != mem_ipv6->size)
-			return false;
-	} else {
-		if (mem_hashed && mem_hashed->size)
-			return false;
-	}
+	if (mem_hashed && mem_hashed->size)
+		return false;
 
 	return true;
 }

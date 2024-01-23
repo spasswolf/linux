@@ -246,13 +246,5 @@ struct ipa_data {
 extern const struct ipa_data ipa_data_v2_0;
 extern const struct ipa_data ipa_data_v2_5;
 extern const struct ipa_data ipa_data_v2_6l;
-extern const struct ipa_data ipa_data_v3_1;
-extern const struct ipa_data ipa_data_v3_5_1;
-extern const struct ipa_data ipa_data_v4_2;
-extern const struct ipa_data ipa_data_v4_5;
-extern const struct ipa_data ipa_data_v4_7;
-extern const struct ipa_data ipa_data_v4_9;
-extern const struct ipa_data ipa_data_v4_11;
-extern const struct ipa_data ipa_data_v5_0;
 
 #endif /* _IPA_DATA_H_ */

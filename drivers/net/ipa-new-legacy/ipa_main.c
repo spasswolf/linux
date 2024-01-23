@@ -219,14 +219,6 @@ ipa_hardware_config_bcr(struct ipa *ipa, const struct ipa_data *data)
 	iowrite32(val, ipa->reg_virt + reg_offset(reg));
 }
 
-static void ipa_hardware_config_tx(struct ipa *ipa)
-{
-}
-
-static void ipa_hardware_config_clkon(struct ipa *ipa)
-{
-}
-
 /* Configure bus access behavior for IPA components */
 static void ipa_hardware_config_comp(struct ipa *ipa)
 {
@@ -248,13 +240,6 @@ static void ipa_hardware_config_comp(struct ipa *ipa)
 	val |= reg_bit(reg, COMP_CFG_ENABLE);
 
 	iowrite32(val, ipa->reg_virt + offset);
-}
-
-/* Configure DDR and (possibly) PCIe max read/write QSB values */
-static void
-ipa_hardware_config_qsb(struct ipa *ipa, const struct ipa_data *data)
-{
-	return;
 }
 
 /* The internal inactivity timer clock is used for the aggregation timer */
@@ -289,32 +274,6 @@ static void ipa_hardware_config_timing(struct ipa *ipa)
 	ipa_hardware_config_counter(ipa);
 }
 
-static void ipa_hardware_config_hashing(struct ipa *ipa)
-{
-	return;
-}
-
-static void ipa_idle_indication_cfg(struct ipa *ipa,
-				    u32 enter_idle_debounce_thresh,
-				    bool const_non_idle_enable)
-{
-	return;
-}
-
-/**
- * ipa_hardware_dcd_config() - Enable dynamic clock division on IPA
- * @ipa:	IPA pointer
- *
- * Configures when the IPA signals it is idle to the global clock
- * controller, which can respond by scaling down the clock to save
- * power.
- */
-static void ipa_hardware_dcd_config(struct ipa *ipa)
-{
-	/* Recommended values for IPA 3.5 and later according to IPA HPG */
-	ipa_idle_indication_cfg(ipa, 256, false);
-}
-
 /**
  * ipa_hardware_config() - Primitive hardware initialization
  * @ipa:	IPA pointer
@@ -323,23 +282,8 @@ static void ipa_hardware_dcd_config(struct ipa *ipa)
 static void ipa_hardware_config(struct ipa *ipa, const struct ipa_data *data)
 {
 	ipa_hardware_config_bcr(ipa, data);
-	ipa_hardware_config_tx(ipa);
-	ipa_hardware_config_clkon(ipa);
 	ipa_hardware_config_comp(ipa);
-	ipa_hardware_config_qsb(ipa, data);
 	ipa_hardware_config_timing(ipa);
-	ipa_hardware_config_hashing(ipa);
-	ipa_hardware_dcd_config(ipa);
-}
-
-/**
- * ipa_hardware_deconfig() - Inverse of ipa_hardware_config()
- * @ipa:	IPA pointer
- *
- * This restores the power-on reset values (even if they aren't different)
- */
-static void ipa_hardware_deconfig(struct ipa *ipa)
-{
 }
 
 /**
@@ -394,7 +338,6 @@ err_uc_deconfig:
 err_mem_deconfig:
 	ipa_mem_deconfig(ipa);
 err_hardware_deconfig:
-	ipa_hardware_deconfig(ipa);
 
 	return ret;
 }
@@ -411,7 +354,6 @@ static void ipa_deconfig(struct ipa *ipa)
 	ipa_interrupt_deconfig(ipa->interrupt);
 	ipa->interrupt = NULL;
 	ipa_mem_deconfig(ipa);
-	ipa_hardware_deconfig(ipa);
 }
 
 static const struct of_device_id ipa_match[] = {
