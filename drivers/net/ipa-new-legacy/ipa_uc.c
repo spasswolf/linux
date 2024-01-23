@@ -233,34 +233,3 @@ void ipa_uc_power(struct ipa *ipa)
 	}
 }
 
-/* Send a command to the microcontroller */
-static void send_uc_command(struct ipa *ipa, u32 command, u32 command_param)
-{
-	const struct reg *reg;
-	u32 val;
-	struct ipa_uc_mem_area *uc_mem = ipa_uc_shared(ipa);
-
-	/* Fill in the command data */
-	uc_mem->command = command;
-	uc_mem->command_param = cpu_to_le32(command_param);
-	uc_mem->response = 0;
-	uc_mem->response_param = 0;
-
-	/* Use an interrupt to tell the microcontroller the command is ready */
-	reg = ipa_reg(ipa, IPA_IRQ_UC);
-	val = reg_bit(reg, UC_INTR);
-
-	iowrite32(val, ipa->reg_virt + reg_offset(reg));
-}
-
-/* Tell the microcontroller the AP is shutting down */
-void ipa_uc_panic_notifier(struct ipa *ipa)
-{
-	if (!ipa->uc_loaded)
-		return;
-
-	send_uc_command(ipa, IPA_UC_COMMAND_ERR_FATAL, 0);
-
-	/* give uc enough time to save state */
-	udelay(IPA_SEND_DELAY);
-}
