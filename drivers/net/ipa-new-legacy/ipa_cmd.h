@@ -79,16 +79,11 @@ void ipa_cmd_pool_exit(struct ipa_dma_channel *channel);
  * @size:	Size of non-hashed routing table memory
  * @offset:	Offset in IPA shared memory of non-hashed routing table memory
  * @addr:	DMA address of non-hashed table data to write
- * @hash_size:	Size of hashed routing table memory
- * @hash_offset: Offset in IPA shared memory of hashed routing table memory
- * @hash_addr:	DMA address of hashed table data to write
  *
  * If hash_size is 0, hash_offset and hash_addr are ignored.
  */
 void ipa_cmd_table_init_add(struct ipa_dma_trans *trans, enum ipa_cmd_opcode opcode,
-			    u16 size, u32 offset, dma_addr_t addr,
-			    u16 hash_size, u32 hash_offset,
-			    dma_addr_t hash_addr);
+			    u16 size, u32 offset, dma_addr_t addr);
 
 /**
  * ipa_cmd_hdr_init_local_add() - Add a header init command to a transaction

@@ -134,18 +134,14 @@ static void ipa_table_validate_build(void)
 }
 
 static const struct ipa_mem *
-ipa_table_mem(struct ipa *ipa, bool filter, bool hashed, bool ipv6)
+ipa_table_mem(struct ipa *ipa, bool filter, bool ipv6)
 {
 	enum ipa_mem_id mem_id;
 
-	mem_id = filter ? hashed ? ipv6 ? IPA_MEM_V6_FILTER_HASHED
-					: IPA_MEM_V4_FILTER_HASHED
-				 : ipv6 ? IPA_MEM_V6_FILTER
-					: IPA_MEM_V4_FILTER
-			: hashed ? ipv6 ? IPA_MEM_V6_ROUTE_HASHED
-					: IPA_MEM_V4_ROUTE_HASHED
-				 : ipv6 ? IPA_MEM_V6_ROUTE
-					: IPA_MEM_V4_ROUTE;
+	mem_id = filter ? ipv6 ? IPA_MEM_V6_FILTER
+			       : IPA_MEM_V4_FILTER
+			: ipv6 ? IPA_MEM_V6_ROUTE
+			       : IPA_MEM_V4_ROUTE;
 
 	return ipa_mem_find(ipa, mem_id);
 }
@@ -189,7 +185,7 @@ static dma_addr_t ipa_table_addr(struct ipa *ipa, bool filter_mask, u16 count)
 }
 
 static void ipa_table_reset_add(struct ipa_dma_trans *trans, bool filter,
-				bool hashed, bool ipv6, u16 first, u16 count)
+				bool ipv6, u16 first, u16 count)
 {
 	struct ipa *ipa = container_of(trans->ipa_dma, struct ipa, ipa_dma);
 	const struct ipa_mem *mem;
@@ -199,7 +195,7 @@ static void ipa_table_reset_add(struct ipa_dma_trans *trans, bool filter,
 	u16 size;
 
 	/* Nothing to do if the memory region is doesn't exist or is empty */
-	mem = ipa_table_mem(ipa, filter, hashed, ipv6);
+	mem = ipa_table_mem(ipa, filter, ipv6);
 	if (!mem || !mem->size)
 		return;
 
@@ -218,7 +214,7 @@ static void ipa_table_reset_add(struct ipa_dma_trans *trans, bool filter,
  * for the IPv4 and IPv6 non-hashed and hashed filter tables.
  */
 static int
-ipa_filter_reset_table(struct ipa *ipa, bool hashed, bool ipv6, bool modem)
+ipa_filter_reset_table(struct ipa *ipa, bool ipv6, bool modem)
 {
 	u64 ep_mask = ipa->filtered;
 	struct ipa_dma_trans *trans;
@@ -243,7 +239,7 @@ ipa_filter_reset_table(struct ipa *ipa, bool hashed, bool ipv6, bool modem)
 		if (endpoint->ee_id != ee_id)
 			continue;
 
-		ipa_table_reset_add(trans, true, hashed, ipv6, endpoint_id, 1);
+		ipa_table_reset_add(trans, true, ipv6, endpoint_id, 1);
 	}
 
 	trans->ipa_dma->ops->trans_commit_wait(trans);
@@ -259,11 +255,11 @@ static int ipa_filter_reset(struct ipa *ipa, bool modem)
 {
 	int ret;
 
-	ret = ipa_filter_reset_table(ipa, false, false, modem);
+	ret = ipa_filter_reset_table(ipa, false, modem);
 	if (ret)
 		return ret;
 
-	return ipa_filter_reset_table(ipa, false, true, modem);
+	return ipa_filter_reset_table(ipa, true, modem);
 }
 
 /* The AP routes and modem routes are each contiguous within the
@@ -293,8 +289,8 @@ static int ipa_route_reset(struct ipa *ipa, bool modem)
 		count = ipa->route_count - modem_route_count;
 	}
 
-	ipa_table_reset_add(trans, false, false, false, first, count);
-	ipa_table_reset_add(trans, false, false, true, first, count);
+	ipa_table_reset_add(trans, false, false, first, count);
+	ipa_table_reset_add(trans, false, true, first, count);
 
 	trans->ipa_dma->ops->trans_commit_wait(trans);
 
@@ -325,16 +321,11 @@ static void ipa_table_init_add(struct ipa_dma_trans *trans, bool filter, bool ip
 {
 	struct ipa *ipa = container_of(trans->ipa_dma, struct ipa, ipa_dma);
 	const struct ipa_mem *mem;
-	const struct ipa_mem *hash_mem;
 	enum ipa_cmd_opcode opcode;
 	const size_t entry_size = sizeof(__le32);
-	dma_addr_t hash_addr;
 	dma_addr_t addr;
-	u32 hash_offset;
 	u32 zero_offset;
-	u16 hash_count;
 	u32 zero_size;
-	u16 hash_size;
 	u16 count;
 	u16 size;
 
@@ -344,9 +335,7 @@ static void ipa_table_init_add(struct ipa_dma_trans *trans, bool filter, bool ip
 			       : IPA_CMD_IP_V4_ROUTING_INIT;
 
 	/* The non-hashed region will exist (see ipa_table_mem_valid()) */
-	mem = ipa_table_mem(ipa, filter, false, ipv6);
-	hash_mem = ipa_table_mem(ipa, filter, true, ipv6);
-	hash_offset = hash_mem ? hash_mem->offset : 0;
+	mem = ipa_table_mem(ipa, filter, ipv6);
 
 	/* Compute the number of table entries to initialize */
 	if (filter) {
@@ -356,44 +345,23 @@ static void ipa_table_init_add(struct ipa_dma_trans *trans, bool filter, bool ip
 		 * table is either the same as the non-hashed one, or zero.
 		 */
 		count = 1 + hweight64(ipa->filtered);
-		if (hash_mem)
-			hash_count = hash_mem->size ? count : 0;
 	} else {
 		/* The size of a route table region determines the number
 		 * of entries it has.
 		 */
 		count = mem->size / entry_size;
-		if (hash_mem)
-			hash_count = hash_mem->size / entry_size;
 	}
 	size = count * entry_size;
-	if (hash_mem)
-		hash_size = hash_count * entry_size;
-	else
-		hash_size = 0;
 
 	addr = ipa_table_addr(ipa, filter, count);
-	if (hash_mem)
-		hash_addr = ipa_table_addr(ipa, filter, hash_count);
 
-	/* if hash_size is zero ipa_cmd_table_init_add ignores
-	 * hash_offset and hash_addr */
-	ipa_cmd_table_init_add(trans, opcode, size, mem->offset, addr,
-			       hash_size, hash_offset, hash_addr);
+	ipa_cmd_table_init_add(trans, opcode, size, mem->offset, addr);
 	if (!filter)
 		return;
 
 	/* Zero the unused space in the filter table */
 	zero_offset = mem->offset + size;
 	zero_size = mem->size - size;
-	ipa_cmd_dma_shared_mem_add(trans, zero_offset, zero_size,
-				   ipa->zero_addr, true);
-	if (!hash_size)
-		return;
-
-	/* Zero the unused space in the hashed filter table */
-	zero_offset = hash_offset + hash_size;
-	zero_size = hash_mem->size - hash_size;
 	ipa_cmd_dma_shared_mem_add(trans, zero_offset, zero_size,
 				   ipa->zero_addr, true);
 }
@@ -444,7 +412,6 @@ void ipa_table_config(struct ipa *ipa)
 bool ipa_table_mem_valid(struct ipa *ipa, bool filter)
 {
 	const size_t entry_size = sizeof (__le32);
-	const struct ipa_mem *mem_hashed;
 	const struct ipa_mem *mem_ipv4;
 	const struct ipa_mem *mem_ipv6;
 	u32 count;
@@ -453,11 +420,11 @@ bool ipa_table_mem_valid(struct ipa *ipa, bool filter)
 	 * have the same size.  Both must have at least two entries (and
 	 * would normally have more than that).
 	 */
-	mem_ipv4 = ipa_table_mem(ipa, filter, false, false);
+	mem_ipv4 = ipa_table_mem(ipa, filter, false);
 	if (!mem_ipv4)
 		return false;
 
-	mem_ipv6 = ipa_table_mem(ipa, filter, false, true);
+	mem_ipv6 = ipa_table_mem(ipa, filter, true);
 	if (!mem_ipv6)
 		return false;
 
@@ -491,20 +458,6 @@ bool ipa_table_mem_valid(struct ipa *ipa, bool filter)
 		if (count < ipa->modem_route_count + 1)
 			return false;
 	}
-
-	/* If hashing is supported, hashed tables are expected to be defined,
-	 * and have the same size as non-hashed tables.  If hashing is not
-	 * supported, hashed tables are expected to have zero size (or not
-	 * be defined).
-	 */
-	mem_hashed = ipa_table_mem(ipa, filter, true, false);
-	if (mem_hashed && mem_hashed->size)
-		return false;
-
-	/* Same check for IPv6 tables */
-	mem_hashed = ipa_table_mem(ipa, filter, true, true);
-	if (mem_hashed && mem_hashed->size)
-		return false;
 
 	return true;
 }

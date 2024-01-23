@@ -215,18 +215,6 @@ void *ipa_dma_trans_pool_alloc_dma(struct ipa_dma_trans_pool *pool, dma_addr_t *
 	return pool->base + offset;
 }
 
-/* Map a TRE ring entry index to the transaction it is associated with */
-static void ipa_dma_trans_map(struct ipa_dma_trans *trans, u32 index)
-{
-	struct ipa_dma_channel *channel = &trans->ipa_dma->channel[trans->channel_id];
-
-	/* The completion event will indicate the last TRE used */
-	index += trans->used_count - 1;
-
-	/* Note: index *must* be used modulo the ring count here */
-	channel->trans_info.map[index % channel->tre_ring.count] = trans;
-}
-
 /* Return the transaction mapped to a given ring entry */
 struct ipa_dma_trans *
 ipa_dma_channel_trans_mapped(struct ipa_dma_channel *channel, u32 index)
@@ -249,16 +237,6 @@ struct ipa_dma_trans *ipa_dma_channel_trans_complete(struct ipa_dma_channel *cha
 	}
 
 	return &trans_info->trans[trans_id %= channel->tre_count];
-}
-
-/* Move a transaction from allocated to committed state */
-static void ipa_dma_trans_move_committed(struct ipa_dma_trans *trans)
-{
-	struct ipa_dma_channel *channel = &trans->ipa_dma->channel[trans->channel_id];
-	struct ipa_dma_trans_info *trans_info = &channel->trans_info;
-
-	/* This allocated transaction is now committed */
-	trans_info->allocated_id++;
 }
 
 /* Move committed transactions to pending state */

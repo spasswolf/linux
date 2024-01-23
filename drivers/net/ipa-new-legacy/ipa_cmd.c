@@ -342,11 +342,9 @@ ipa_cmd_payload_alloc(struct ipa *ipa, dma_addr_t *addr)
 	return ipa_dma_trans_pool_alloc_dma(&trans_info->cmd_pool, addr);
 }
 
-/* If hash_size is 0, hash_offset and hash_addr ignored. */
 void ipa_cmd_table_init_add(struct ipa_dma_trans *trans,
 			    enum ipa_cmd_opcode opcode, u16 size, u32 offset,
-			    dma_addr_t addr, u16 hash_size, u32 hash_offset,
-			    dma_addr_t hash_addr)
+			    dma_addr_t addr)
 {
 	struct ipa *ipa = container_of(trans->ipa_dma, struct ipa, ipa_dma);
 	struct ipa_cmd_hw_ip_fltrt_init *payload;
