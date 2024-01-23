@@ -28,7 +28,6 @@
 #include "ipa_reg.h"
 #include "ipa_mem.h"
 #include "ipa_table.h"
-#include "ipa_smp2p.h"
 #include "ipa_modem.h"
 #include "ipa_uc.h"
 #include "ipa_interrupt.h"
@@ -272,65 +271,6 @@ static __always_inline u32 ipa_aggr_granularity_val(u32 usec)
 	return DIV_ROUND_CLOSEST(usec * TIMER_FREQUENCY, USEC_PER_SEC) - 1;
 }
 
-/* IPA uses unified Qtime starting at IPA v4.5, implementing various
- * timestamps and timers independent of the IPA core clock rate.  The
- * Qtimer is based on a 56-bit timestamp incremented at each tick of
- * a 19.2 MHz SoC crystal oscillator (XO clock).
- *
- * For IPA timestamps (tag, NAT, data path logging) a lower resolution
- * timestamp is achieved by shifting the Qtimer timestamp value right
- * some number of bits to produce the low-order bits of the coarser
- * granularity timestamp.
- *
- * For timers, a common timer clock is derived from the XO clock using
- * a divider (we use 192, to produce a 100kHz timer clock).  From
- * this common clock, three "pulse generators" are used to produce
- * timer ticks at a configurable frequency.  IPA timers (such as
- * those used for aggregation or head-of-line block handling) now
- * define their period based on one of these pulse generators.
- */
-static void ipa_qtime_config(struct ipa *ipa)
-{
-	const struct reg *reg;
-	u32 offset;
-	u32 val;
-
-	/* Timer clock divider must be disabled when we change the rate */
-	reg = ipa_reg(ipa, TIMERS_XO_CLK_DIV_CFG);
-	iowrite32(0, ipa->reg_virt + reg_offset(reg));
-
-	reg = ipa_reg(ipa, QTIME_TIMESTAMP_CFG);
-	/* Set DPL time stamp resolution to use Qtime (instead of 1 msec) */
-	val = reg_encode(reg, DPL_TIMESTAMP_LSB, DPL_TIMESTAMP_SHIFT);
-	val |= reg_bit(reg, DPL_TIMESTAMP_SEL);
-	/* Configure tag and NAT Qtime timestamp resolution as well */
-	val = reg_encode(reg, TAG_TIMESTAMP_LSB, TAG_TIMESTAMP_SHIFT);
-	val = reg_encode(reg, NAT_TIMESTAMP_LSB, NAT_TIMESTAMP_SHIFT);
-
-	iowrite32(val, ipa->reg_virt + reg_offset(reg));
-
-	/* Set granularity of pulse generators used for other timers */
-	reg = ipa_reg(ipa, TIMERS_PULSE_GRAN_CFG);
-	val = reg_encode(reg, PULSE_GRAN_0, IPA_GRAN_100_US);
-	val |= reg_encode(reg, PULSE_GRAN_1, IPA_GRAN_1_MS);
-	val |= reg_encode(reg, PULSE_GRAN_2, IPA_GRAN_1_MS);
-
-	iowrite32(val, ipa->reg_virt + reg_offset(reg));
-
-	/* Actual divider is 1 more than value supplied here */
-	reg = ipa_reg(ipa, TIMERS_XO_CLK_DIV_CFG);
-	offset = reg_offset(reg);
-
-	val = reg_encode(reg, DIV_VALUE, IPA_XO_CLOCK_DIVIDER - 1);
-
-	iowrite32(val, ipa->reg_virt + offset);
-
-	/* Divider value is set; re-enable the common timer clock divider */
-	val |= reg_bit(reg, DIV_ENABLE);
-
-	iowrite32(val, ipa->reg_virt + offset);
-}
-
 /* Before IPA v4.5 timing is controlled by a counter register */
 static void ipa_hardware_config_counter(struct ipa *ipa)
 {
@@ -373,12 +313,6 @@ static void ipa_hardware_dcd_config(struct ipa *ipa)
 {
 	/* Recommended values for IPA 3.5 and later according to IPA HPG */
 	ipa_idle_indication_cfg(ipa, 256, false);
-}
-
-static void ipa_hardware_dcd_deconfig(struct ipa *ipa)
-{
-	/* Power-on reset values */
-	ipa_idle_indication_cfg(ipa, 0, true);
 }
 
 /**
@@ -478,67 +412,6 @@ static void ipa_deconfig(struct ipa *ipa)
 	ipa->interrupt = NULL;
 	ipa_mem_deconfig(ipa);
 	ipa_hardware_deconfig(ipa);
-}
-
-static int ipa_firmware_load(struct device *dev)
-{
-	const struct firmware *fw;
-	struct device_node *node;
-	struct resource res;
-	phys_addr_t phys;
-	const char *path;
-	ssize_t size;
-	void *virt;
-	int ret;
-
-	node = of_parse_phandle(dev->of_node, "memory-region", 0);
-	if (!node) {
-		dev_err(dev, "DT error getting \"memory-region\" property\n");
-		return -EINVAL;
-	}
-
-	ret = of_address_to_resource(node, 0, &res);
-	of_node_put(node);
-	if (ret) {
-		dev_err(dev, "error %d getting \"memory-region\" resource\n",
-			ret);
-		return ret;
-	}
-
-	/* Use name from DTB if specified; use default for *any* error */
-	ret = of_property_read_string(dev->of_node, "firmware-name", &path);
-	if (ret) {
-		dev_dbg(dev, "error %d getting \"firmware-name\" resource\n",
-			ret);
-		path = IPA_FW_PATH_DEFAULT;
-	}
-
-	ret = request_firmware(&fw, path, dev);
-	if (ret) {
-		dev_err(dev, "error %d requesting \"%s\"\n", ret, path);
-		return ret;
-	}
-
-	phys = res.start;
-	size = (size_t)resource_size(&res);
-	virt = memremap(phys, size, MEMREMAP_WC);
-	if (!virt) {
-		dev_err(dev, "unable to remap firmware memory\n");
-		ret = -ENOMEM;
-		goto out_release_firmware;
-	}
-
-	ret = qcom_mdt_load(dev, fw, path, IPA_PAS_ID, virt, phys, size, NULL);
-	if (ret)
-		dev_err(dev, "error %d loading \"%s\"\n", ret, path);
-	else if ((ret = qcom_scm_pas_auth_and_reset(IPA_PAS_ID)))
-		dev_err(dev, "error %d authenticating \"%s\"\n", ret, path);
-
-	memunmap(virt);
-out_release_firmware:
-	release_firmware(fw);
-
-	return ret;
 }
 
 static const struct of_device_id ipa_match[] = {
@@ -743,10 +616,6 @@ static int ipa_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_endpoint_exit;
 
-	ret = ipa_smp2p_init(ipa, loader == IPA_LOADER_MODEM);
-	if (ret)
-		goto err_table_exit;
-
 	/* Power needs to be active for config and setup */
 	ret = pm_runtime_get_sync(dev);
 	if (WARN_ON(ret < 0))
@@ -778,8 +647,6 @@ err_deconfig:
 	ipa_deconfig(ipa);
 err_power_put:
 	pm_runtime_put_noidle(dev);
-	ipa_smp2p_exit(ipa);
-err_table_exit:
 	ipa_table_exit(ipa);
 err_endpoint_exit:
 	ipa_endpoint_exit(ipa);
@@ -805,11 +672,6 @@ static int ipa_remove(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	int ret;
 
-	/* Prevent the modem from triggering a call to ipa_setup().  This
-	 * also ensures a modem-initiated setup that's underway completes.
-	 */
-	ipa_smp2p_irq_disable_setup(ipa);
-
 	ret = pm_runtime_get_sync(dev);
 	if (WARN_ON(ret < 0))
 		goto out_power_put;
@@ -830,7 +692,6 @@ static int ipa_remove(struct platform_device *pdev)
 	ipa_deconfig(ipa);
 out_power_put:
 	pm_runtime_put_noidle(dev);
-	ipa_smp2p_exit(ipa);
 	ipa_table_exit(ipa);
 	ipa_endpoint_exit(ipa);
 	ipa_dma->ops->exit(ipa_dma);

@@ -20,7 +20,6 @@
 #include "ipa_table.h"
 #include "ipa_mem.h"
 #include "ipa_modem.h"
-#include "ipa_smp2p.h"
 #include "ipa_qmi.h"
 #include "ipa_uc.h"
 #include "ipa_power.h"
@@ -373,9 +372,6 @@ static void ipa_modem_crashed(struct ipa *ipa)
 	struct device *dev = &ipa->pdev->dev;
 	int ret;
 
-	/* Prevent the modem from triggering a call to ipa_setup() */
-	ipa_smp2p_irq_disable_setup(ipa);
-
 	ret = pm_runtime_get_sync(dev);
 	if (ret < 0) {
 		dev_err(dev, "error %d getting power to handle crash\n", ret);
@@ -423,7 +419,6 @@ static int ipa_modem_notify(struct notifier_block *nb, unsigned long action,
 	case QCOM_SSR_BEFORE_POWERUP:
 		dev_info(dev, "received modem starting event\n");
 		ipa_uc_power(ipa);
-		ipa_smp2p_notify_reset(ipa);
 		break;
 
 	case QCOM_SSR_AFTER_POWERUP:
