@@ -431,61 +431,6 @@ int ipa_table_setup(struct ipa *ipa)
 	return 0;
 }
 
-/**
- * ipa_filter_tuple_zero() - Zero an endpoint's hashed filter tuple
- * @endpoint:	Endpoint whose filter hash tuple should be zeroed
- *
- * Endpoint must be for the AP (not modem) and support filtering. Updates
- * the filter hash values without changing route ones.
- */
-static void ipa_filter_tuple_zero(struct ipa_endpoint *endpoint)
-{
-	u32 endpoint_id = endpoint->endpoint_id;
-	struct ipa *ipa = endpoint->ipa;
-	const struct reg *reg;
-	u32 offset;
-	u32 val;
-
-	reg = ipa_reg(ipa, ENDP_FILTER_ROUTER_HSH_CFG);
-
-	offset = reg_n_offset(reg, endpoint_id);
-	val = ioread32(endpoint->ipa->reg_virt + offset);
-
-	/* Zero all filter-related fields, preserving the rest */
-	val &= ~reg_fmask(reg, FILTER_HASH_MSK_ALL);
-
-	iowrite32(val, endpoint->ipa->reg_virt + offset);
-}
-
-static bool ipa_route_id_modem(struct ipa *ipa, u32 route_id)
-{
-	return route_id < ipa->modem_route_count;
-}
-
-/**
- * ipa_route_tuple_zero() - Zero a hashed route table entry tuple
- * @ipa:	IPA pointer
- * @route_id:	Route table entry whose hash tuple should be zeroed
- *
- * Updates the route hash values without changing filter ones.
- */
-static void ipa_route_tuple_zero(struct ipa *ipa, u32 route_id)
-{
-	const struct reg *reg;
-	u32 offset;
-	u32 val;
-
-	reg = ipa_reg(ipa, ENDP_FILTER_ROUTER_HSH_CFG);
-	offset = reg_n_offset(reg, route_id);
-
-	val = ioread32(ipa->reg_virt + offset);
-
-	/* Zero all route-related fields, preserving the rest */
-	val &= ~reg_fmask(reg, ROUTER_HASH_MSK_ALL);
-
-	iowrite32(val, ipa->reg_virt + offset);
-}
-
 /* Configure a filter and route tables; there is no ipa_table_deconfig() */
 void ipa_table_config(struct ipa *ipa)
 {

@@ -518,10 +518,6 @@ static void ipa_imem_exit(struct ipa *ipa)
 static int ipa_smem_init(struct ipa *ipa, u32 item, size_t size)
 {
 	struct device *dev = &ipa->pdev->dev;
-	struct iommu_domain *domain;
-	unsigned long iova;
-	phys_addr_t phys;
-	phys_addr_t addr;
 	size_t actual;
 	void *virt;
 	int ret;

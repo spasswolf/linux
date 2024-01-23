@@ -87,7 +87,7 @@ struct ipa {
 	struct ipa_power *power;
 
 	dma_addr_t table_addr;
-	void *table_virt;
+	__le32 *table_virt;
 	u32 route_count;
 	u32 modem_route_count;
 	u32 filter_count;
