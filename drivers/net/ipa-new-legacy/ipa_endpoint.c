@@ -220,7 +220,7 @@ static bool ipa_endpoint_data_valid_one(struct ipa *ipa, u32 count,
 	struct device *dev = &ipa->pdev->dev;
 	enum ipa_endpoint_name other_name;
 
-	if (ipa_gsi_endpoint_data_empty(data))
+	if (ipa_dma_endpoint_data_empty(data))
 		return true;
 
 	if (!data->toward_ipa) {
@@ -310,7 +310,7 @@ static bool ipa_endpoint_data_valid_one(struct ipa *ipa, u32 count,
 
 		/* Status endpoint must be defined... */
 		other_data = &all_data[other_name];
-		if (ipa_gsi_endpoint_data_empty(other_data)) {
+		if (ipa_dma_endpoint_data_empty(other_data)) {
 			dev_err(dev, "DMA endpoint name %u undefined "
 					"for endpoint %u\n",
 				other_name, data->endpoint_id);
@@ -347,7 +347,7 @@ static bool ipa_endpoint_data_valid_one(struct ipa *ipa, u32 count,
 		}
 
 		other_data = &all_data[other_name];
-		if (ipa_gsi_endpoint_data_empty(other_data)) {
+		if (ipa_dma_endpoint_data_empty(other_data)) {
 			dev_err(dev, "DMA endpoint name %u undefined "
 					"for endpoint %u\n",
 				other_name, data->endpoint_id);
@@ -374,19 +374,19 @@ static u32 ipa_endpoint_max(struct ipa *ipa, u32 count,
 	}
 
 	/* Make sure needed endpoints have defined data */
-	if (ipa_gsi_endpoint_data_empty(&data[IPA_ENDPOINT_AP_COMMAND_TX])) {
+	if (ipa_dma_endpoint_data_empty(&data[IPA_ENDPOINT_AP_COMMAND_TX])) {
 		dev_err(dev, "command TX endpoint not defined\n");
 		return 0;
 	}
-	if (ipa_gsi_endpoint_data_empty(&data[IPA_ENDPOINT_AP_LAN_RX])) {
+	if (ipa_dma_endpoint_data_empty(&data[IPA_ENDPOINT_AP_LAN_RX])) {
 		dev_err(dev, "LAN RX endpoint not defined\n");
 		return 0;
 	}
-	if (ipa_gsi_endpoint_data_empty(&data[IPA_ENDPOINT_AP_MODEM_TX])) {
+	if (ipa_dma_endpoint_data_empty(&data[IPA_ENDPOINT_AP_MODEM_TX])) {
 		dev_err(dev, "AP->modem TX endpoint not defined\n");
 		return 0;
 	}
-	if (ipa_gsi_endpoint_data_empty(&data[IPA_ENDPOINT_AP_MODEM_RX])) {
+	if (ipa_dma_endpoint_data_empty(&data[IPA_ENDPOINT_AP_MODEM_RX])) {
 		dev_err(dev, "AP<-modem RX endpoint not defined\n");
 		return 0;
 	}
@@ -520,17 +520,6 @@ ipa_endpoint_program_suspend(struct ipa_endpoint *endpoint, bool enable)
 		ipa_endpoint_suspend_aggr(endpoint);
 
 	return suspended;
-}
-
-/* Put all modem RX endpoints into suspend mode, and stop transmission
- * on all modem TX endpoints.  Prior to IPA v4.2, endpoint DELAY mode is
- * used for TX endpoints; starting with IPA v4.2 we use GSI channel flow
- * control instead.
- */
-void ipa_endpoint_modem_pause_all(struct ipa *ipa, bool enable)
-{
-	/* Pausing is not supported on IPA v2.6L */
-	return;
 }
 
 /* Reset all modem endpoints to use the default exception endpoint */
@@ -1853,7 +1842,7 @@ int ipa_endpoint_init(struct ipa *ipa, u32 count,
 
 	filtered = 0;
 	for (name = 0; name < count; name++, data++) {
-		if (ipa_gsi_endpoint_data_empty(data))
+		if (ipa_dma_endpoint_data_empty(data))
 			continue;	/* Skip over empty slots */
 
 		ipa_endpoint_init_one(ipa, name, data);
@@ -1887,3 +1876,10 @@ err_free_defined:
 
 	return -ENOMEM;
 }
+
+/* Indicate whether an endpoint config data entry is "empty" */
+bool ipa_dma_endpoint_data_empty(const struct ipa_dma_endpoint_data *data)
+{
+	return data->ee_id == IPA_EE_AP && !data->channel.tlv_count;
+}
+

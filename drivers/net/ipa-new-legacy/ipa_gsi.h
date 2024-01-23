@@ -44,15 +44,4 @@ void ipa_gsi_trans_release(struct ipa_dma_trans *trans);
 void ipa_gsi_channel_tx_completed(struct ipa_dma *ipa_dma, u32 channel_id, u32 count,
 				  u32 byte_count);
 
-/* ipa_gsi_endpoint_data_empty() - Empty endpoint config data test
- * @data:	endpoint configuration data
- *
- * Determines whether an endpoint configuration data entry is empty,
- * meaning it contains no valid configuration information and should
- * be ignored.
- *
- * Return:	true if empty; false otherwise
- */
-bool ipa_gsi_endpoint_data_empty(const struct ipa_dma_endpoint_data *data);
-
 #endif /* _IPA_GSI_TRANS_H_ */

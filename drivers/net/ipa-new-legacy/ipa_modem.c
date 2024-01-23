@@ -378,8 +378,6 @@ static void ipa_modem_crashed(struct ipa *ipa)
 		goto out_power_put;
 	}
 
-	ipa_endpoint_modem_pause_all(ipa, true);
-
 	ipa_endpoint_modem_hol_block_clear_all(ipa);
 
 	ipa_table_reset(ipa, true);
@@ -387,8 +385,6 @@ static void ipa_modem_crashed(struct ipa *ipa)
 	ret = ipa_endpoint_modem_exception_reset_all(ipa);
 	if (ret)
 		dev_err(dev, "error %d resetting exception endpoint\n", ret);
-
-	ipa_endpoint_modem_pause_all(ipa, false);
 
 	ret = ipa_modem_stop(ipa);
 	if (ret)

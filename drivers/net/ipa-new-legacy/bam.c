@@ -122,7 +122,7 @@ int bam_channel_init(struct ipa_dma *ipa_dma, u32 count,
 
 err_unwind:
 	while (i--) {
-		if (ipa_gsi_endpoint_data_empty(&data[i]))
+		if (ipa_dma_endpoint_data_empty(&data[i]))
 			continue;
 
 		bam_channel_exit_one(&ipa_dma->channel[i]);

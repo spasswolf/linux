@@ -98,9 +98,6 @@ enum ipa_uc_command {
 	IPA_UC_COMMAND_CLK_UNGATE	= 0x6,
 	IPA_UC_COMMAND_MEMCPY		= 0x7,
 	IPA_UC_COMMAND_RESET_PIPE	= 0x8,
-	/* Next two commands are present for IPA v3.0+ */
-	IPA_UC_COMMAND_REG_WRITE	= 0x9,
-	IPA_UC_COMMAND_GSI_CH_EMPTY	= 0xa,
 };
 
 /** enum ipa_uc_response - microcontroller response codes */

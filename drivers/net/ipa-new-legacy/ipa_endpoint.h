@@ -171,8 +171,6 @@ struct ipa_endpoint {
 
 void ipa_endpoint_modem_hol_block_clear_all(struct ipa *ipa);
 
-void ipa_endpoint_modem_pause_all(struct ipa *ipa, bool enable);
-
 int ipa_endpoint_modem_exception_reset_all(struct ipa *ipa);
 
 int ipa_endpoint_skb_tx(struct ipa_endpoint *endpoint, struct sk_buff *skb);
@@ -203,5 +201,16 @@ void ipa_endpoint_trans_complete(struct ipa_endpoint *ipa,
 				 struct ipa_dma_trans *trans);
 void ipa_endpoint_trans_release(struct ipa_endpoint *ipa,
 				struct ipa_dma_trans *trans);
+
+/* ipa_dma_endpoint_data_empty() - Empty endpoint config data test
+ * @data:	endpoint configuration data
+ *
+ * Determines whether an endpoint configuration data entry is empty,
+ * meaning it contains no valid configuration information and should
+ * be ignored.
+ *
+ * Return:	true if empty; false otherwise
+ */
+bool ipa_dma_endpoint_data_empty(const struct ipa_dma_endpoint_data *data);
 
 #endif /* _IPA_ENDPOINT_H_ */
