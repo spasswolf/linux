@@ -3,8 +3,10 @@
  */
 
 #define IPA_BAM_BASE			0x4000
-#define IPA_BASE			0x40000
-#define IPA_SRAM_BASE			0x45000
+//#define IPA_BASE			0x40000
+#define IPA_BASE			0
+//#define IPA_SRAM_BASE			0x45000
+#define IPA_SRAM_BASE			0
 
 #define BAM_REG(off)			((off) + IPA_BAM_BASE)
 #define BAM_P_REG(off, pipe)		(BAM_REG(off) + (pipe) * 0x1000)
@@ -66,10 +68,10 @@
 #define REG_BAM_P_EVNT_GEN_TRSHLD(pipe)	BAM_P_REG(0x13828, (pipe))
 #define REG_BAM_P_FIFO_SIZES(pipe)	BAM_P_REG(0x13820, (pipe))
 
-struct __packed fifo_desc {
+struct __packed fifo_desc {  // this is similar to struct bam_desc_hw
 	__le32 addr;
-	union {
-		__le16 size;
+	union {              // in bam_desc_hw this is only __le16 size
+		__le16 size; // can the bam_dma.c code still be used here? Yes. Just use opcode as length.
 		__le16 opcode;
 	};
 	__le16 flags;
