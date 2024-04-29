@@ -4,6 +4,7 @@
 #include <linux/bitfield.h>
 #include <linux/clk.h>
 #include <linux/dma-mapping.h>
+#include <linux/dmaengine.h>
 #include <linux/etherdevice.h>
 #include <linux/if_arp.h>
 #include <linux/if_rmnet.h>
@@ -30,7 +31,7 @@
 #define IPA_NUM_PIPES			(20)
 #define IPA_RX_LEN			(2048)
 #define IPA_TX_STOP_FREE_THRESH		(0)
-#define IPA_PIPE_IRQ_MASK		(P_PRCSD_DESC_EN | P_ERR_EN | P_TRNSFR_END_EN)
+#define IPA_PIPE_IRQ_MASK		(P_PRCSD_DESC_EN | P_ERR_EN | P_TRNSFR_END_EN) // same P_DEFAULT_IRQS_EN in bam_dma.c
 #define EP_DMA_DIR(ep)			((ep)->is_rx ? DMA_FROM_DEVICE : DMA_TO_DEVICE)
 
 static bool test_mode;
@@ -55,6 +56,9 @@ struct ipa_dma_obj {
 	struct device *dev;
 };
 
+#define PTR_TO_DMA_ADDR(ptr, obj) \
+	((obj).addr + (((void *)(ptr)) - (obj).virt))
+
 #define DEF_ACTION(func, arg, ...) \
 	static void action_##func(void *ptr) \
 	{ \
@@ -63,19 +67,30 @@ struct ipa_dma_obj {
 			func(__VA_ARGS__); \
 	}
 
+struct ipa_ep;
+
+struct ipa_trans {
+	struct ipa_ep *ep;
+	u32 len; // we need the bam metadata patch to get the rx length
+	dma_cookie_t cookie;
+	struct sk_buff *skb; // sk_buff used in this trans, NULL for commands (commands do not use this struct anyway)
+	dma_addr_t addr;     // dma addr of skb, so we can unmap when finished
+};
+
 struct ipa_ep {
-	atomic_t free_descs;
-	spinlock_t lock; /* transmit only */
-	struct fifo_desc *fifo;
+	atomic_t free_descs; // named tre_avail in  ipa_dma_trans_info
+	u8 allocated_head; // Do we need both head and tail for the allocated transactions?
+	u8 allocated_tail;
+	u8 pending_head;
+	u8 pending_tail;
 	struct ipa *ipa;
-	struct ipa_dma_obj fifo_obj;
+	struct dma_chan *dma_chan; // bam channel
+	struct ipa_trans *trans; // this is a ring buffer with 256 entries // only needed for tx/rx channels
 	struct napi_struct *napi;
-	struct sk_buff **skbs;
 	u32 has_status	    :1;
 	u32 id		    :8;
 	u32 is_rx	    :1;
-	u32 head, tail;
-	void __iomem *reg_rd_off, *reg_wr_off;
+	bool polling;
 };
 
 struct ipa {
@@ -92,8 +107,8 @@ struct ipa {
 	u32 *smem_uc_loaded;
 	u32 version, smem_size, smem_restr_bytes;
 	void *ssr_cookie;
-	void __iomem *mmio;
-	struct ipa_dma_obj system_hdr;
+	void __iomem *ipa_base;
+	void __iomem *ipa_sram_base;
 };
 
 struct ipa_ndev {
@@ -138,14 +153,14 @@ static void ipa_dma_free(struct ipa_dma_obj *obj)
 	obj->size = 0;
 }
 
-DEF_ACTION(ipa_dma_free, struct ipa_dma_obj *obj, obj);
+//DEF_ACTION(ipa_dma_free, struct ipa_dma_obj *obj, obj);
 
 static int ipa_dma_alloc(struct ipa *ipa, struct ipa_dma_obj *obj, u32 size)
 {
 	if (WARN_ON(!size))
 		return -EINVAL;
 
-	obj->virt = dma_alloc_coherent(ipa->dev, size + 8, &obj->addr, GFP_KERNEL);
+	obj->virt = dma_alloc_coherent(ipa->dev, size, &obj->addr, GFP_KERNEL);
 	if (!obj->virt)
 		return -ENOMEM;
 
@@ -154,210 +169,92 @@ static int ipa_dma_alloc(struct ipa *ipa, struct ipa_dma_obj *obj, u32 size)
 	return 0;
 }
 
-static int devm_ipa_dma_alloc(struct ipa *ipa, struct ipa_dma_obj *obj, u32 size)
-{
-	int ret = ipa_dma_alloc(ipa, obj, size);
-
-	if (!ret)
-		ret = devm_add_action_or_reset(ipa->dev, action_ipa_dma_free, obj);
-
-	return ret;
-}
-
 static void ipa_reset_hw(struct ipa *ipa)
 {
-	iowrite32(1, ipa->mmio + REG_IPA_COMP_SW_RESET_OFST);
-	iowrite32(0, ipa->mmio + REG_IPA_COMP_SW_RESET_OFST);
-	iowrite32(1, ipa->mmio + REG_IPA_COMP_CFG_OFST);
-	if (ipa->version >= 25)
-		iowrite32(0x1fff7f, ipa->mmio + REG_IPA_BCR_OFST);
-
-	iowrite32(BAM_SW_RST, ipa->mmio + REG_BAM_CTRL);
-	iowrite32(0, ipa->mmio + REG_BAM_CTRL);
-
-	iowrite32(0x10, ipa->mmio + REG_BAM_DESC_CNT_TRSHLD);
-	iowrite32((u32)~BIT(11), ipa->mmio + REG_BAM_CNFG_BITS);
-	rmw32(ipa->mmio + REG_BAM_CTRL, BAM_EN, BAM_EN);
-
-	iowrite32(BAM_ERROR_EN | BAM_HRESP_ERR_EN, ipa->mmio + REG_BAM_IRQ_EN);
-	iowrite32(BAM_IRQ, ipa->mmio + REG_BAM_IRQ_SRCS_MSK_EE0);
+	iowrite32(1, ipa->ipa_base + REG_IPA_COMP_SW_RESET_OFST);
+	iowrite32(0, ipa->ipa_base + REG_IPA_COMP_SW_RESET_OFST);
+	iowrite32(1, ipa->ipa_base + REG_IPA_COMP_CFG_OFST);
+	if (ipa->version >= 25) // We do not have versions < 25 here, so far.
+		iowrite32(0x1fff7f, ipa->ipa_base + REG_IPA_BCR_OFST);
 }
 
-static inline u32 ipa_fifo_offset(void __iomem *reg)
-{
-	u32 off = readl_relaxed(reg) & 0xffff;
-
-	off /= sizeof(struct fifo_desc);
-
-	WARN_ON(off & ~IPA_FIFO_IDX_MASK);
-
-	return off & IPA_FIFO_IDX_MASK;
-}
-
-static void ipa_bam_reset_pipe(struct ipa_ep *ep)
-{
-	void *mmio = ep->ipa->mmio;
-	u32 val, id = ep->id;
-
-	atomic_set(&ep->free_descs, IPA_FIFO_NUM_DESC - 1);
-
-	iowrite32(ep->id != EP_CMD, mmio + REG_IPA_EP_CTRL(id));
-	iowrite32(ep->is_rx ? 1 : 0, mmio + REG_IPA_EP_HOL_BLOCK_EN(id));
-
-	iowrite32(0, mmio + REG_BAM_P_CTRL(id));
-	iowrite32(1, mmio + REG_BAM_P_RST(id));
-	iowrite32(0, mmio + REG_BAM_P_RST(id));
-
-	ep->head = 0;
-	ep->tail = 0;
-
-	iowrite32(ep->head * sizeof(struct fifo_desc), ep->reg_rd_off);
-	iowrite32(ep->tail * sizeof(struct fifo_desc), ep->reg_wr_off);
-	iowrite32(ALIGN(ep->fifo_obj.addr, 8),
-		  mmio + REG_BAM_P_DESC_FIFO_ADDR(id));
-	iowrite32(IPA_FIFO_SIZE, mmio + REG_BAM_P_FIFO_SIZES(id));
-	iowrite32(0, mmio + REG_BAM_P_IRQ_EN(id));
-
-	val = ep->is_rx ? P_DIRECTION : 0;
-
-	iowrite32(P_SYS_MODE | P_EN | val, mmio + REG_BAM_P_CTRL(id));
-
-	WARN_ON(ipa_fifo_offset(ep->reg_rd_off) != ipa_fifo_offset(ep->reg_wr_off));
-}
+static const char *ipa_ep_dma_chan_name[] = {"test_tx",
+					     "test_rx",
+					     "ap_lan_rx",
+					     "cmd_tx",
+					     "ap_modem_tx",
+					     "ap_modem_rx"
+};
 
 static int ipa_setup_ep(struct ipa *ipa, enum ipa_ep_id id)
 {
 	struct ipa_ep *ep = &ipa->ep[id];
-	int ret;
+	struct dma_slave_config bam_config;
 
-	ret = devm_ipa_dma_alloc(ipa, &ep->fifo_obj, IPA_FIFO_SIZE + 8);
-	if (ret)
-		return ret;
+	// TODO: We only need a trans array if we have a dma_chan
+	ep->trans = (struct ipa_trans *) kzalloc(IPA_FIFO_NUM_DESC * sizeof(struct ipa_trans), GFP_KERNEL);
+	if (!ep->trans)
+		return -ENOMEM;
 
-	spin_lock_init(&ep->lock);
-
+	atomic_set(&ep->free_descs, IPA_FIFO_NUM_DESC);
+	ep->allocated_head = 0;
+	ep->allocated_tail = 0;
+	ep->pending_head = 0;
+	ep->pending_tail = 0;
 	ep->id = id;
 	ep->ipa = ipa;
+	ep->polling = false;
+	if(ipa_ep_dma_chan_name[id]) {
+		ep->dma_chan = dma_request_chan(ipa->dev, ipa_ep_dma_chan_name[id]); // TODO: define names
+		if (IS_ERR(ep->dma_chan)) {
+			printk(KERN_INFO "%s: failed to request dma_chan for %s with error %d\n", __func__, ipa_ep_dma_chan_name[id], (int) PTR_ERR(ep->dma_chan));
+			kfree(ep->trans);
+			return (int) PTR_ERR(ep->dma_chan);
+		}
+	}
 	ep->is_rx = EP_ID_IS_RX(id);
-	ep->fifo = PTR_ALIGN(ep->fifo_obj.virt, 8);
-	ep->reg_rd_off = ipa->mmio + REG_BAM_P_RD_OFF_REG(id);
-	ep->reg_wr_off = ipa->mmio + REG_BAM_P_WR_OFF_REG(id);
 
-	ipa_bam_reset_pipe(ep);
+	iowrite32(ep->id != EP_CMD, ipa->ipa_base + REG_IPA_EP_CTRL(id));
+	iowrite32(ep->is_rx ? 1 : 0, ipa->ipa_base + REG_IPA_EP_HOL_BLOCK_EN(id));
 
-	rmw32(ipa->mmio + REG_BAM_IRQ_SRCS_MSK_EE0, BIT(id), BIT(id));
+	bam_config.direction = ep->is_rx ? DMA_DEV_TO_MEM : DMA_MEM_TO_DEV;
+	if (ep->id == EP_CMD)
+		bam_config.dst_maxburst = 20;
+	else if (ep->is_rx)
+		bam_config.src_maxburst = 8;
+	else
+		bam_config.dst_maxburst = 8;
+
+	if (ep->dma_chan) {
+		dmaengine_slave_config(ep->dma_chan, &bam_config);
+	}
 
 	switch (id) {
 	case EP_LAN_RX:
 		ep->has_status = 1;
-		iowrite32(0x00000002, ipa->mmio + REG_IPA_EP_HDR(id));
-		iowrite32(0x00000803, ipa->mmio + REG_IPA_EP_HDR_EXT(id));
-		iowrite32(0x00000000, ipa->mmio + REG_IPA_EP_HDR_METADATA_MASK(id));
-		iowrite32(0x00000001, ipa->mmio + REG_IPA_EP_STATUS(id));
+		iowrite32(0x00000002, ipa->ipa_base + REG_IPA_EP_HDR(id));
+		iowrite32(0x00000803, ipa->ipa_base + REG_IPA_EP_HDR_EXT(id));
+		iowrite32(0x00000000, ipa->ipa_base + REG_IPA_EP_HDR_METADATA_MASK(id));
+		iowrite32(0x00000001, ipa->ipa_base + REG_IPA_EP_STATUS(id));
 		break;
 	case EP_TX:
 	case EP_TEST_TX:
-		iowrite32(ipa->test_mode ? 0xc4 : 0x44, ipa->mmio + REG_IPA_EP_HDR(id));
-		iowrite32(0x00000001, ipa->mmio + REG_IPA_EP_HDR_EXT(id));
-		iowrite32(0x00000005, ipa->mmio + REG_IPA_EP_STATUS(id));
-		iowrite32(0x00000007, ipa->mmio + REG_IPA_EP_ROUTE(id));
-		iowrite32(0x00000020, ipa->mmio + REG_IPA_EP_MODE(id));
+		iowrite32(ipa->test_mode ? 0xc4 : 0x44, ipa->ipa_base + REG_IPA_EP_HDR(id));
+		iowrite32(0x00000001, ipa->ipa_base + REG_IPA_EP_HDR_EXT(id));
+		iowrite32(0x00000005, ipa->ipa_base + REG_IPA_EP_STATUS(id));
+		iowrite32(0x00000007, ipa->ipa_base + REG_IPA_EP_ROUTE(id));
+		iowrite32(0x00000020, ipa->ipa_base + REG_IPA_EP_MODE(id));
 		break;
 	case EP_RX:
 	case EP_TEST_RX:
-		iowrite32(0x002800c4, ipa->mmio + REG_IPA_EP_HDR(id));
-		iowrite32(0x0000000b, ipa->mmio + REG_IPA_EP_HDR_EXT(id));
-		iowrite32(0xff000000, ipa->mmio + REG_IPA_EP_HDR_METADATA_MASK(id));
+		iowrite32(0x002800c4, ipa->ipa_base + REG_IPA_EP_HDR(id));
+		iowrite32(0x0000000b, ipa->ipa_base + REG_IPA_EP_HDR_EXT(id));
+		iowrite32(0xff000000, ipa->ipa_base + REG_IPA_EP_HDR_METADATA_MASK(id));
 	default:
 		break;
 	}
 
 	return 0;
-}
-
-static inline void ipa_release_descs(struct ipa_ep *ep, int reserved)
-{
-	atomic_add(reserved, &ep->free_descs);
-}
-
-static inline int ipa_reserve_descs(struct ipa_ep *ep, int count)
-{
-	if (unlikely(count <= 0 && atomic_read(&ep->free_descs) < count))
-		return 0;
-
-	if (atomic_sub_return(count, &ep->free_descs) < 0)
-		atomic_add(count, &ep->free_descs);
-	else
-		return count;
-	return 0;
-}
-
-static int ipa_enqueue_descs(struct ipa_ep *ep, struct fifo_desc *descs,
-			     int num_descs, struct sk_buff **skbs)
-{
-	u32 next, head, tail, first_idx;
-	unsigned long flags;
-
-	spin_lock_irqsave(&ep->lock, flags);
-
-	first_idx = tail = ep->tail;
-	head = ep->head;
-
-	while (num_descs) {
-		next = IPA_FIFO_NEXT_IDX(tail);
-		if (WARN_ON(next == head)) {
-			spin_unlock_irqrestore(&ep->lock, flags);
-			return -EINVAL;
-		}
-		ep->fifo[tail] = *(descs++);
-		if (likely(skbs))
-			ep->skbs[tail] = *(skbs++);
-		tail = next;
-		num_descs--;
-	}
-
-	ep->tail = tail;
-
-	/* Ensure descriptor write completes before updating tail pointer */
-	wmb();
-
-	iowrite32(tail * sizeof(struct fifo_desc), ep->reg_wr_off);
-
-	spin_unlock_irqrestore(&ep->lock, flags);
-
-	return first_idx;
-}
-
-static int
-ipa_submit_sync(struct ipa_ep *ep, struct fifo_desc *descs, int num_descs)
-{
-	int timeout = 100;
-	u32 idx, end_idx;
-
-	idx = ipa_enqueue_descs(ep, descs, num_descs, NULL);
-	if (idx < 0)
-		return idx;
-
-	while (idx != ep->head && --timeout > 0)
-		usleep_range(200, 300);
-
-	if (idx != ep->head)
-		return -ETIMEDOUT;
-
-	end_idx = (idx + num_descs) & IPA_FIFO_IDX_MASK;
-
-	do {
-		while (idx != end_idx && idx != ipa_fifo_offset(ep->reg_rd_off))
-			idx = IPA_FIFO_NEXT_IDX(idx);
-
-		ep->head = idx;
-		if (idx == end_idx)
-			return 0;
-
-		usleep_range(200, 300);
-	} while (--timeout > 0);
-
-	return -ETIMEDOUT;
 }
 
 static int ipa_uc_send_cmd(struct ipa *ipa, u8 cmd_op, u32 cmd_param, u32 resp_status)
@@ -372,15 +269,15 @@ static int ipa_uc_send_cmd(struct ipa *ipa, u8 cmd_op, u32 cmd_param, u32 resp_s
 
 	timeout = ret;
 
-	iowrite32(cmd_op, ipa->mmio + REG_IPA_UC_CMD);
-	iowrite32(cmd_param, ipa->mmio + REG_IPA_UC_CMD_PARAM);
-	iowrite32(0, ipa->mmio + REG_IPA_UC_RESP);
-	iowrite32(0, ipa->mmio + REG_IPA_UC_RESP_PARAM);
+	iowrite32(cmd_op, ipa->ipa_sram_base + REG_IPA_UC_CMD);
+	iowrite32(cmd_param, ipa->ipa_sram_base + REG_IPA_UC_CMD_PARAM);
+	iowrite32(0, ipa->ipa_sram_base + REG_IPA_UC_RESP);
+	iowrite32(0, ipa->ipa_sram_base + REG_IPA_UC_RESP_PARAM);
 
-	iowrite32(1, ipa->mmio + REG_IPA_IRQ_UC_EE0);
+	iowrite32(1, ipa->ipa_base + REG_IPA_IRQ_UC_EE0);
 
 	ret = wait_event_timeout(ipa->uc_cmd_wq,
-		(val = FIELD_GET(IPA_UC_RESP_OP_MASK, ioread32(ipa->mmio + REG_IPA_UC_RESP))) ==
+		(val = FIELD_GET(IPA_UC_RESP_OP_MASK, ioread32(ipa->ipa_sram_base + REG_IPA_UC_RESP))) ==
 		IPA_UC_RESPONSE_CMD_COMPLETED,
 		timeout);
 
@@ -391,7 +288,7 @@ static int ipa_uc_send_cmd(struct ipa *ipa, u8 cmd_op, u32 cmd_param, u32 resp_s
 		return -ETIMEDOUT;
 
 	val = FIELD_GET(IPA_UC_RESP_OP_PARAM_STATUS_MASK,
-			ioread32(ipa->mmio + REG_IPA_UC_RESP_PARAM));
+			ioread32(ipa->ipa_sram_base + REG_IPA_UC_RESP_PARAM));
 	if (val != resp_status) {
 		dev_err(ipa->dev, "cmd %d returned unexpected status: %d\n",
 			cmd_op, val);
@@ -419,7 +316,7 @@ static void ipa_reset_modem_pipes(struct ipa *ipa)
 static void ipa_partition_put(struct ipa *ipa, u32 *offset,
 			      enum ipa_part_id id, u32 size_words, u32 align_words)
 {
-	u32 __iomem *ptr = ipa->mmio + REG_IPA_SRAM_SW_FIRST_v2_5 +
+	u32 __iomem *ptr = ipa->ipa_sram_base +
 		(ipa->version < 25 ? ipa->smem_restr_bytes : 0) + *offset;
 	bool first_canary = true;
 	u32 canary = 0xdeadbeaf;
@@ -448,7 +345,7 @@ static int ipa_partition_mem(struct ipa *ipa)
 {
 	u32 offset, val;
 
-	val = ioread32(ipa->mmio + REG_IPA_SHARED_MEM);
+	val = ioread32(ipa->ipa_base + REG_IPA_SHARED_MEM);
 
 	ipa->smem_restr_bytes = FIELD_GET(IPA_SHARED_MEM_BADDR_BMSK, val);
 	ipa->smem_size = FIELD_GET(IPA_SHARED_MEM_SIZE_BMSK, val);
@@ -479,43 +376,35 @@ static int ipa_partition_mem(struct ipa *ipa)
 	return 0;
 }
 
-static void ipa_setup_cmd_desc(struct fifo_desc *desc, enum ipa_cmd_opcode opcode,
-			       struct ipa_dma_obj *cmd_args_obj, void *cmd_args_ptr)
-{
-	desc->addr = cmd_args_ptr - cmd_args_obj->virt + cmd_args_obj->addr;
-	desc->flags = DESC_FLAG_IMMCMD | DESC_FLAG_EOT;
-	desc->opcode = opcode;
+static void ipa_cmd_callback(void *arg) {
+	complete(arg);
 }
 
 static int ipa_init_sram_part(struct ipa *ipa, enum ipa_part_id mem_id)
 {
-	u32 part_offset, *payload, *end, val;
+	u32 part_offset, payload_addr, *payload, *end, val;
 	struct ipa_partition *part = ipa->layout + mem_id;
-	struct ipa_dma_obj pld, cmd_args;
 	struct ipa_ep *ep = ipa->ep + EP_CMD;
-	struct fifo_desc descs[3];
-	struct fifo_desc *desc = descs;
-	int ret, reserved;
+	struct ipa_dma_obj pld, cmds;
+	int ret;
+	DECLARE_COMPLETION_ONSTACK(completion);
+	struct dma_async_tx_descriptor *desc;
 	union ipa_cmd *cmd;
 
 	if (!part->size)
 		return 0;
 
-	reserved = ipa_reserve_descs(ep, ARRAY_SIZE(descs));
-	if (!reserved)
-		return -EBUSY;
-
-	ret = ipa_dma_alloc(ipa, &cmd_args, sizeof(*cmd) * ARRAY_SIZE(descs));
+	ret = ipa_dma_alloc(ipa, &cmds, sizeof(*cmd) * 2 + 4);
 	if (ret)
-		goto release_descs;
+		return ret;
 
 	ret = ipa_dma_alloc(ipa, &pld, part->size);
 	if (ret)
 		goto free_cmd_args;
 
 	part_offset = part->offset;
+	payload_addr = pld.addr;
 	payload = pld.virt;
-	cmd = cmd_args.virt;
 
 	switch (mem_id) {
 	case MEM_DRV:
@@ -548,46 +437,67 @@ static int ipa_init_sram_part(struct ipa *ipa, enum ipa_part_id mem_id)
 		}
 	}
 
+	cmd = cmds.virt;
+
 	switch (mem_id) {
 	case MEM_MDM_HDR:
-		ret = devm_ipa_dma_alloc(ipa, &ipa->system_hdr, 2048);
-		if (ret)
-			goto free_pld;
-
-		cmd->hdr_system_init.hdr_table_addr = ipa->system_hdr.addr;
-		ipa_setup_cmd_desc(desc++, IPA_CMD_HDR_SYSTEM_INIT, &cmd_args, cmd++);
-
-		cmd->hdr_local_init.hdr_table_src_addr = pld.addr;
-		cmd->hdr_local_init.hdr_table_dst_addr = part_offset;
+		cmd->hdr_local_init.hdr_table_src_addr = payload_addr;
 		cmd->hdr_local_init.size_hdr_table = part->size;
-		ipa_setup_cmd_desc(desc++, IPA_CMD_HDR_LOCAL_INIT, &cmd_args, cmd++);
-
+		cmd->hdr_local_init.hdr_table_dst_addr = part_offset;
+		desc = dmaengine_prep_slave_single(ep->dma_chan, PTR_TO_DMA_ADDR(cmd, cmds),
+				IPA_CMD_HDR_LOCAL_INIT, DMA_MEM_TO_DEV,
+				DMA_PREP_IMM_CMD | DMA_PREP_INTERRUPT);
+		desc->cookie = dmaengine_submit(desc);
+		cmd++;
 		fallthrough;
 	case MEM_MDM_COMP:
 	case MEM_MDM:
 	case MEM_DRV:
-		cmd->dma_smem.system_addr = pld.addr;
+		desc = dmaengine_prep_slave_single(ep->dma_chan, PTR_TO_DMA_ADDR(cmd, cmds),
+				IPA_CMD_DMA_SHARED_MEM, DMA_MEM_TO_DEV,
+				DMA_PREP_IMM_CMD | DMA_PREP_INTERRUPT);
+		cmd->dma_smem.system_addr = payload_addr;
 		cmd->dma_smem.local_addr = part_offset;
 		cmd->dma_smem.size = part->size;
-		ipa_setup_cmd_desc(desc++, IPA_CMD_DMA_SHARED_MEM, &cmd_args, cmd++);
+		desc->callback = ipa_cmd_callback;
+		desc->callback_param = &completion;
+		desc->cookie = dmaengine_submit(desc);
 		break;
 	case MEM_RT_V4:
 	case MEM_FT_V4:
+		if (mem_id == MEM_RT_V4) {
+			desc = dmaengine_prep_slave_single(ep->dma_chan, PTR_TO_DMA_ADDR(cmd, cmds),
+					IPA_CMD_RT_V4_INIT, DMA_MEM_TO_DEV,
+					DMA_PREP_IMM_CMD | DMA_PREP_INTERRUPT);
+		} else {
+			desc = dmaengine_prep_slave_single(ep->dma_chan, PTR_TO_DMA_ADDR(cmd, cmds),
+					IPA_CMD_FT_V4_INIT, DMA_MEM_TO_DEV,
+					DMA_PREP_IMM_CMD | DMA_PREP_INTERRUPT);
+		}
 		cmd->rule_v4_init.ipv4_addr = part_offset;
 		cmd->rule_v4_init.size_ipv4_rules = part->size;
-		cmd->rule_v4_init.ipv4_rules_addr = pld.addr;
-		ipa_setup_cmd_desc(desc++, (mem_id == MEM_RT_V4) ?
-				   IPA_CMD_RT_V4_INIT : IPA_CMD_FT_V4_INIT,
-				   &cmd_args, cmd++);
+		cmd->rule_v4_init.ipv4_rules_addr = payload_addr;
+		desc->callback = ipa_cmd_callback;
+		desc->callback_param = &completion;
+		desc->cookie = dmaengine_submit(desc);
 		break;
 	case MEM_RT_V6:
 	case MEM_FT_V6:
+		if (mem_id == MEM_RT_V6) {
+			desc = dmaengine_prep_slave_single(ep->dma_chan, PTR_TO_DMA_ADDR(cmd, cmds),
+					IPA_CMD_RT_V6_INIT, DMA_MEM_TO_DEV,
+					DMA_PREP_IMM_CMD | DMA_PREP_INTERRUPT);
+		} else {
+			desc = dmaengine_prep_slave_single(ep->dma_chan, PTR_TO_DMA_ADDR(cmd, cmds),
+					IPA_CMD_FT_V6_INIT, DMA_MEM_TO_DEV,
+					DMA_PREP_IMM_CMD | DMA_PREP_INTERRUPT);
+		}
 		cmd->rule_v6_init.ipv6_addr = part_offset;
 		cmd->rule_v6_init.size_ipv6_rules = part->size;
-		cmd->rule_v6_init.ipv6_rules_addr = pld.addr;
-		ipa_setup_cmd_desc(desc++, (mem_id == MEM_RT_V6) ?
-				   IPA_CMD_RT_V6_INIT : IPA_CMD_FT_V6_INIT,
-				   &cmd_args, cmd++);
+		cmd->rule_v6_init.ipv6_rules_addr = payload_addr;
+		desc->callback = ipa_cmd_callback;
+		desc->callback_param = &completion;
+		desc->cookie = dmaengine_submit(desc);
 		break;
 	default:
 		WARN_ON(1);
@@ -595,16 +505,15 @@ static int ipa_init_sram_part(struct ipa *ipa, enum ipa_part_id mem_id)
 		goto free_pld;
 	}
 
-	ret = ipa_submit_sync(ep, descs, desc - &descs[0]);
+	dma_async_issue_pending(ep->dma_chan);
 
+	if (!wait_for_completion_timeout(&completion, msecs_to_jiffies(1000)))
+		ret = -ETIMEDOUT;
 free_pld:
 	ipa_dma_free(&pld);
 
 free_cmd_args:
-	ipa_dma_free(&cmd_args);
-
-release_descs:
-	ipa_release_descs(ep, reserved);
+	ipa_dma_free(&cmds);
 
 	return ret;
 }
@@ -623,29 +532,26 @@ static int ipa_init_sram(struct ipa *ipa)
 	return 0;
 }
 
-static void ipa_reset_flush_ep(struct ipa_ep *ep)
+static void ipa_unmap_skbs(struct ipa_ep *ep)
 {
-	u32 head = ep->head, tail = ep->tail;
-	struct ipa *ipa = ep->ipa;
-	struct sk_buff *skb;
-	struct fifo_desc desc;
+	struct ipa_trans *trans;
+	u8 index;
 
-	ipa_bam_reset_pipe(ep);
+	if (atomic_read(&ep->free_descs) == IPA_FIFO_NUM_DESC)
+		return;
 
-	while (head != tail) {
-		desc = ep->fifo[head];
-		skb = ep->skbs[head];
-		ep->fifo[head].size = 0;
+	index = ep->pending_head;
 
-		dma_unmap_single(ipa->dev, desc.addr,
-				 ep->is_rx ? IPA_RX_LEN : skb->len,
-				 EP_DMA_DIR(ep));
-		if (skb)
-			dev_kfree_skb_any(skb);
+	do {
+		trans = &ep->trans[index];
 
-		ep->fifo[head].addr = 0;
-		head = IPA_FIFO_NEXT_IDX(head);
-	}
+		dma_unmap_single(ep->ipa->dev, trans->addr, ep->is_rx ? IPA_RX_LEN : trans->skb->len, EP_DMA_DIR(ep));
+
+		if (trans->skb)
+			dev_kfree_skb_any(trans->skb);
+
+		index++;
+	} while (index != ep->pending_tail);
 }
 
 static int ipa_ssr_notifier(struct notifier_block *nb,
@@ -670,11 +576,11 @@ static irqreturn_t ipa_isr_thread(int irq, void *data)
 	struct ipa *ipa = data;
 	u32 val;
 
-	val = ioread32(ipa->mmio + REG_IPA_IRQ_STTS_EE0);
-	iowrite32(val, ipa->mmio + REG_IPA_IRQ_CLR_EE0);
+	val = ioread32(ipa->ipa_base + REG_IPA_IRQ_STTS_EE0);
+	iowrite32(val, ipa->ipa_base + REG_IPA_IRQ_CLR_EE0);
 
 	if (val & BIT(IPA_IRQ_UC_IRQ_1)) {
-		val = ioread32(ipa->mmio + REG_IPA_UC_RESP);
+		val = ioread32(ipa->ipa_sram_base + REG_IPA_UC_RESP);
 		val &= IPA_UC_RESP_OP_MASK;
 		if (ipa->qmi && val == IPA_UC_RESPONSE_INIT_COMPLETED) {
 			ipa_qmi_uc_loaded(ipa->qmi);
@@ -687,44 +593,63 @@ static irqreturn_t ipa_isr_thread(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t ipa_dma_isr(int irq, void *data)
+static void ipa_napi_callback(void *arg)
 {
-	struct ipa *ipa = data;
-	enum ipa_ep_id id;
-	u32 srcs;
+	struct ipa_ep *ep = (struct ipa_ep *) arg;
 
-	srcs = ioread32(ipa->mmio + REG_BAM_IRQ_SRCS_EE0);
+	if (!ep->polling) {
+		// This way further callbacks do no call napi_schedule.
+		ep->polling = true;
+		napi_schedule(ep->napi); // return value is ignored
+	}
+}
 
-	if (srcs & BIT(31)) {
-		u32 sts = ioread32(ipa->mmio + REG_BAM_IRQ_STTS);
+static struct ipa_trans *ipa_allocate_trans_new(struct ipa_ep *ep)
+{
+	struct ipa_trans *trans;
 
-		iowrite32(sts, ipa->mmio + REG_BAM_IRQ_CLR);
-		srcs &= ~BIT(31);
+	if (atomic_sub_return(1, &ep->free_descs) < 0) {
+		atomic_inc(&ep->free_descs);
+		return NULL;
 	}
 
-	for (id = 0; id < EP_NUM; id++) {
-		struct ipa_ep *ep = ipa->ep + id;
+	trans = &ep->trans[ep->allocated_tail];
+	memset(trans, 0, sizeof(*trans));
+	trans->ep = ep;
+	ep->allocated_tail++;
+	return trans;
+}
 
-		if (!(srcs & BIT(id)))
-			continue;
 
-		u32 val = ioread32(ipa->mmio + REG_BAM_P_IRQ_STTS(id));
+static void ipa_trans_free_unused(struct ipa_trans *trans)
+{
+	struct ipa_ep *ep = trans->ep;
+	ep->allocated_tail--;
+	atomic_inc(&ep->free_descs);
+}
 
-		srcs &= ~BIT(id);
+static void ipa_trans_free(struct ipa_trans *trans)
+{
+	struct ipa_ep *ep = trans->ep;
+	ep->allocated_head++;
+	atomic_inc(&ep->free_descs);
+}
 
-		if (unlikely(val & P_ERR_EN))
-			dev_warn_ratelimited(ipa->dev, "error on BAM pipe %d\n", id);
+static struct ipa_trans *bam_channel_poll_one_new(struct ipa_ep *ep)
+{
+	struct ipa_trans *trans;
+	enum dma_status trans_status;
 
-		iowrite32(val, ipa->mmio + REG_BAM_P_IRQ_CLR(id));
-
-		if (ep->napi && napi_schedule_prep(ep->napi)) {
-			iowrite32(0, ipa->mmio + REG_BAM_P_IRQ_EN(id));
-			__napi_schedule_irqoff(ep->napi);
+	if (atomic_read(&ep->free_descs) < IPA_FIFO_NUM_DESC) {
+		trans = &ep->trans[ep->pending_head];
+		trans_status = dma_async_is_tx_complete(ep->dma_chan, trans->cookie, NULL, NULL);
+		if (trans_status == DMA_COMPLETE) {
+			ep->pending_head++;
+			return trans;
 		}
 	}
 
-	WARN_ON_ONCE(srcs);
-	return IRQ_HANDLED;
+	return NULL;
 }
 
 static int ipa_poll_tx(struct napi_struct *napi, int budget)
@@ -734,28 +659,26 @@ static int ipa_poll_tx(struct napi_struct *napi, int budget)
 	struct ipa *ipa = ep->ipa;
 	struct device *dev = ipa->dev;
 	struct sk_buff *skb;
-	struct fifo_desc desc;
 	u32 packets = 0, bytes = 0;
 	int done = 0;
 
-	u32 off = ipa_fifo_offset(ep->reg_rd_off);
+	while (done < budget) {
+		struct ipa_trans *trans;
+		done++;
+		trans = bam_channel_poll_one_new(ep);
+		if (!trans)
+			break;
 
-	while (done < budget && ep->head != off) {
-		skb = ep->skbs[ep->head];
-		desc = ep->fifo[ep->head];
+		skb = trans->skb;
+		BUG_ON(!skb);
 
 		bytes += skb->len;
 		packets++;
 
-		dma_unmap_single(dev, desc.addr, skb->len, DMA_TO_DEVICE);
+		dma_unmap_single(dev, trans->addr, skb->len, DMA_TO_DEVICE);
 		dev_consume_skb_any(skb);
-		atomic_inc(&ep->free_descs);
 
-		ep->head = IPA_FIFO_NEXT_IDX(ep->head);
-		done++;
-
-		if (ep->head == off)
-			off = ipa_fifo_offset(ep->reg_rd_off);
+		ipa_trans_free(trans);
 	}
 
 	if (netif_queue_stopped(ndev) &&
@@ -766,7 +689,7 @@ static int ipa_poll_tx(struct napi_struct *napi, int budget)
 	ndev->stats.tx_packets += packets;
 
 	if (budget && done < budget && napi_complete_done(napi, done))
-		iowrite32(IPA_PIPE_IRQ_MASK, ipa->mmio + REG_BAM_P_IRQ_EN(ep->id));
+		ep->polling = false;
 
 	return done;
 }
@@ -778,19 +701,19 @@ static int ipa_poll_rx(struct napi_struct *napi, int budget)
 	struct ipa *ipa = ep->ipa;
 	struct device *dev = ipa->dev;
 	struct sk_buff *skb, *new_skb;
-	struct fifo_desc desc;
 	u32 packets = 0, bytes = 0;
 	dma_addr_t addr;
 	int done = 0;
+	struct dma_async_tx_descriptor *desc;
 
-	u32 off = ipa_fifo_offset(ep->reg_rd_off);
+	while (done < budget) {
+		struct ipa_trans *trans;
 
-	while (done < budget && ep->head != off) {
-		desc = ep->fifo[ep->head];
-		skb = ep->skbs[ep->head];
+		trans = bam_channel_poll_one_new(ep);
+		if (!trans)
+			break;
 
-		if (WARN_ON_ONCE(desc.size > IPA_RX_LEN))
-			goto skip_rx;
+		skb = trans->skb;
 
 		new_skb = netdev_alloc_skb(ndev, IPA_RX_LEN);
 		if (unlikely(!new_skb))
@@ -803,11 +726,11 @@ static int ipa_poll_rx(struct napi_struct *napi, int budget)
 			goto skip_rx;
 		}
 
-		skb_put(skb, desc.size);
+		skb_put(skb, trans->len);
 		skb->dev = ndev;
 		skb->protocol = htons(ETH_P_MAP);
 
-		dma_unmap_single(dev, desc.addr, IPA_RX_LEN, DMA_FROM_DEVICE);
+		dma_unmap_single(dev, trans->addr, IPA_RX_LEN, DMA_FROM_DEVICE);
 
 		if (unlikely(dump)) {
 			char prefix[8] = "RX EP  ";
@@ -825,25 +748,30 @@ static int ipa_poll_rx(struct napi_struct *napi, int budget)
 			dev_kfree_skb_any(skb);
 		}
 
+		ipa_trans_free(trans);
+		trans = NULL;
+
+		// We need a new trans here!
+		trans = ipa_allocate_trans_new(ep);
+		if (!trans) {
+			dev_kfree_skb_any(new_skb);
+			dev_err(dev, "ipa_allocate_trans_new failed in %s\n", __func__);
+			goto skip_rx;
+		}
+
 		skb = new_skb;
-		desc.addr = addr;
-
+		desc = dmaengine_prep_slave_single(ep->dma_chan, addr, IPA_RX_LEN, DMA_DEV_TO_MEM, DMA_PREP_INTERRUPT);
+		desc->cookie = dmaengine_submit(desc);
+		trans->cookie = desc->cookie;
+		trans->skb = skb;
+		trans->addr = addr;
+		dmaengine_desc_attach_metadata(desc, &trans->len, sizeof(trans->len));
+		desc->callback = ipa_napi_callback;
+		desc->callback_param = ep;
+		ep->pending_tail++;
+		dma_async_issue_pending(ep->dma_chan);
 skip_rx:
-		desc.size = IPA_RX_LEN;
-		desc.flags = DESC_FLAG_INT;
-		ep->skbs[ep->tail] = skb;
-		ep->fifo[ep->tail] = desc;
-		ep->tail = IPA_FIFO_NEXT_IDX(ep->tail);
-
-		/* Ensure descriptor write completes before updating tail pointer */
-		wmb();
-
-		iowrite32(ep->tail * sizeof(struct fifo_desc), ep->reg_wr_off);
-		ep->head = IPA_FIFO_NEXT_IDX(ep->head);
 		done++;
-
-		if (ep->head == off)
-			off = ipa_fifo_offset(ep->reg_rd_off);
 	}
 
 	ndev->stats.rx_bytes += bytes;
@@ -851,7 +779,7 @@ skip_rx:
 	ndev->stats.rx_dropped += done - packets;
 
 	if (budget && done < budget && napi_complete_done(napi, done))
-		iowrite32(IPA_PIPE_IRQ_MASK, ipa->mmio + REG_BAM_P_IRQ_EN(ep->id));
+		ep->polling = false;
 
 	return done;
 }
@@ -859,14 +787,16 @@ skip_rx:
 static int ipa_enqueue_skb(struct sk_buff *skb, struct net_device *ndev, struct ipa_ep *ep)
 {
 	struct device *dev = ep->ipa->dev;
-	struct fifo_desc desc;
-	int ret, reserved;
+	struct dma_async_tx_descriptor *desc;
+	int ret;
+	struct ipa_trans *trans = NULL;
 	u32 len;
+	enum dma_transfer_direction direction;
 
 	len = ep->is_rx ? IPA_RX_LEN : skb->len;
 
-	reserved = ipa_reserve_descs(ep, 1);
-	if (WARN_ON(!reserved))
+	trans = ipa_allocate_trans_new(ep);
+	if (WARN_ON(!trans))
 		return -EBUSY;
 
 	if (ep->is_rx) {
@@ -884,27 +814,36 @@ static int ipa_enqueue_skb(struct sk_buff *skb, struct net_device *ndev, struct 
 
 	dma_addr_t addr = dma_map_single(dev, skb->data, len, EP_DMA_DIR(ep));
 
-	if (dma_mapping_error(dev, addr))
+	if (dma_mapping_error(dev, addr)) {
+		printk(KERN_INFO "%s %d: dma mapping error\n", __func__, __LINE__);
 		goto free_skb;
+	}
 
-	desc.addr = addr;
-	desc.size = len;
-	desc.flags = ep->is_rx ? DESC_FLAG_INT : DESC_FLAG_EOT;
+	direction = ep->is_rx ? DMA_DEV_TO_MEM : DMA_MEM_TO_DEV;
+	desc = dmaengine_prep_slave_single(ep->dma_chan, addr, len, direction, DMA_PREP_INTERRUPT);
 
-	ret = ipa_enqueue_descs(ep, &desc, 1, &skb);
-	if (unlikely(ret < 0))
-		goto unmap_skb;
+	desc->callback = ipa_napi_callback;
+	desc->callback_param = ep;
 
-	return atomic_read(&ep->free_descs);
+	desc->cookie = dmaengine_submit(desc);
+	trans->cookie = desc->cookie;
+	trans->skb = skb;
+	trans->addr = addr;
 
-unmap_skb:
-	dma_unmap_single(dev, addr, len, EP_DMA_DIR(ep));
+	if (ep->is_rx)
+		dmaengine_desc_attach_metadata(desc, &trans->len, sizeof(trans->len));
+
+	ep->pending_tail++;
+
+	dma_async_issue_pending(ep->dma_chan);
+
+	return atomic_read(&ep->free_descs); // Is this ever used?
 
 free_skb:
 	dev_kfree_skb_any(skb);
 
 release_desc:
-	ipa_release_descs(ep, reserved);
+	ipa_trans_free_unused(trans);
 
 	return ret;
 }
@@ -915,45 +854,21 @@ static int ipa_ndev_open(struct net_device *ndev)
 	struct ipa *ipa = ipa_ndev->rx->ipa;
 	int ret = 0;
 
-	if (!ipa_ndev->rx->skbs) {
-		ipa_ndev->rx->skbs = devm_kzalloc(ipa->dev,
-				sizeof(struct sk_buff) * IPA_FIFO_NUM_DESC,
-				GFP_KERNEL);
-		if (!ipa_ndev->rx->skbs)
-			return -ENOMEM;
-	}
-
-	if (ipa_ndev->tx && !ipa_ndev->tx->skbs) {
-		ipa_ndev->tx->skbs = devm_kzalloc(ipa->dev,
-				sizeof(struct sk_buff) * IPA_FIFO_NUM_DESC,
-				GFP_KERNEL);
-
-		if (!ipa_ndev->tx->skbs)
-			return -ENOMEM;
-	}
-
 	pm_runtime_get_sync(ipa->dev);
 
-	while (atomic_read(&ipa_ndev->rx->free_descs) > 0) {
+	while (atomic_read(&ipa_ndev->rx->free_descs) > 0) { // If we enqueue 256 skbs, do we get into trouble with our u8 index?
 		ret = ipa_enqueue_skb(NULL, ndev, ipa_ndev->rx);
 		if (WARN_ON(ret < 0))
 			goto fail;
 	}
 
 	napi_enable(ipa_ndev->rx->napi);
-	rmw32(ipa->mmio + REG_BAM_P_CTRL(ipa_ndev->rx->id), P_EN, P_EN);
-	iowrite32(0, ipa->mmio + REG_IPA_EP_HOL_BLOCK_EN(ipa_ndev->rx->id));
-	iowrite32(0, ipa->mmio + REG_IPA_EP_CTRL(ipa_ndev->rx->id));
-
-	iowrite32(IPA_PIPE_IRQ_MASK, ipa->mmio + REG_BAM_P_IRQ_EN(ipa_ndev->rx->id));
+	iowrite32(0, ipa->ipa_base + REG_IPA_EP_HOL_BLOCK_EN(ipa_ndev->rx->id));
+	iowrite32(0, ipa->ipa_base + REG_IPA_EP_CTRL(ipa_ndev->rx->id));
 
 	if (ipa_ndev->tx) {
-		rmw32(ipa->mmio + REG_BAM_P_CTRL(ipa_ndev->tx->id), P_EN, P_EN);
-
-		iowrite32(0, ipa->mmio + REG_IPA_EP_CTRL(ipa_ndev->tx->id));
+		iowrite32(0, ipa->ipa_base + REG_IPA_EP_CTRL(ipa_ndev->tx->id));
 		napi_enable(ipa_ndev->tx->napi);
-
-		iowrite32(IPA_PIPE_IRQ_MASK, ipa->mmio + REG_BAM_P_IRQ_EN(ipa_ndev->tx->id));
 	}
 
 	netif_start_queue(ndev);
@@ -961,7 +876,7 @@ static int ipa_ndev_open(struct net_device *ndev)
 	return 0;
 
 fail:
-	ipa_reset_flush_ep(ipa_ndev->rx);
+	ipa_unmap_skbs(ipa_ndev->rx);
 	pm_runtime_put(ipa->dev);
 	return ret;
 }
@@ -973,14 +888,13 @@ static int ipa_ndev_stop(struct net_device *ndev)
 
 	netif_stop_queue(ndev);
 
-	iowrite32(0, ipa->mmio + REG_BAM_P_IRQ_EN(ipa_ndev->rx->id));
-
 	napi_disable(ipa_ndev->rx->napi);
-	ipa_reset_flush_ep(ipa_ndev->rx);
+	dmaengine_terminate_sync(ipa_ndev->rx->dma_chan);
+	ipa_unmap_skbs(ipa_ndev->rx);
 	if (ipa_ndev->tx) {
-		iowrite32(0, ipa->mmio + REG_BAM_P_IRQ_EN(ipa_ndev->tx->id));
 		napi_disable(ipa_ndev->tx->napi);
-		ipa_reset_flush_ep(ipa_ndev->tx);
+		dmaengine_terminate_sync(ipa_ndev->tx->dma_chan);
+		ipa_unmap_skbs(ipa_ndev->tx);
 	}
 
 	pm_runtime_put(ipa->dev);
@@ -1131,9 +1045,13 @@ static int ipa_probe(struct platform_device *pdev)
 	init_waitqueue_head(&ipa->uc_cmd_wq);
 	platform_set_drvdata(pdev, ipa);
 
-	ipa->mmio = devm_platform_ioremap_resource(pdev, 0);
-	if (IS_ERR_OR_NULL(ipa->mmio))
-		return PTR_ERR(ipa->mmio) ?: -ENOMEM;
+	ipa->ipa_base = devm_platform_ioremap_resource_byname(pdev, "ipa-reg");
+	if (IS_ERR(ipa->ipa_base))
+		return PTR_ERR(ipa->ipa_base);
+
+	ipa->ipa_sram_base = devm_platform_ioremap_resource_byname(pdev, "ipa-shared");
+	if (IS_ERR(ipa->ipa_sram_base))
+		return PTR_ERR(ipa->ipa_sram_base);
 
 	ipa->clk = devm_clk_get_enabled(dev, NULL);
 	if (IS_ERR(ipa->clk))
@@ -1141,8 +1059,6 @@ static int ipa_probe(struct platform_device *pdev)
 				     "failed to get clock\n");
 
 	clk_set_rate(ipa->clk, 40000000);
-
-	dma_set_mask_and_coherent(dev, DMA_BIT_MASK(32));
 
 	ipa_reset_hw(ipa);
 
@@ -1156,13 +1072,19 @@ static int ipa_probe(struct platform_device *pdev)
 			return ret;
 	}
 
-	iowrite32(0x00040044, ipa->mmio + REG_IPA_ROUTE_OFST);
+	iowrite32(0x00040044, ipa->ipa_base + REG_IPA_ROUTE_OFST);
+
+	ret = dma_set_mask_and_coherent(ipa->dev, DMA_BIT_MASK(32));
+	if (ret) {
+		dev_err(ipa->dev, "error %d setting DMA mask\n", ret);
+		return ret;
+	}
 
 	ret = ipa_init_sram(ipa);
 	if (ret)
-		return 0;
+		return ret;
 
-	rmw32(ipa->mmio + REG_IPA_IRQ_EN_EE0, BIT(IPA_IRQ_UC_IRQ_1), BIT(IPA_IRQ_UC_IRQ_1));
+	rmw32(ipa->ipa_base + REG_IPA_IRQ_EN_EE0, BIT(IPA_IRQ_UC_IRQ_1), BIT(IPA_IRQ_UC_IRQ_1));
 
 	ret = of_irq_get_byname(dev->of_node, "ipa");
 	if (ret < 0)
@@ -1173,13 +1095,30 @@ static int ipa_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	ret = of_irq_get_byname(dev->of_node, "dma");
-	if (ret < 0)
-		return ret;
+	if (ipa->test_mode)
+		goto skip_modem;
 
-	ret = devm_request_irq(dev, ret, ipa_dma_isr, 0, "ipa-dma", ipa);
+	ipa->ssr_cookie = qcom_register_ssr_notifier("mpss", &ipa->ssr_nb);
+	if (IS_ERR(ipa->ssr_cookie))
+		return dev_err_probe(dev, PTR_ERR(ipa->ssr_cookie),
+				     "failed to register SSR notifier\n");
+
+	ret = devm_add_action_or_reset(dev, action_qcom_unregister_ssr_notifier, ipa);
 	if (ret)
 		return ret;
+
+	ipa->qmi = ipa_qmi_setup(dev, ipa->layout);
+	if (IS_ERR(ipa->qmi))
+		return PTR_ERR(ipa->qmi);
+
+	if (ipa->smem_uc_loaded[0] == 0x10ADEDFF)
+		ipa_qmi_uc_loaded(ipa->qmi);
+
+	ret = devm_add_action_or_reset(dev, action_ipa_qmi_teardown, ipa);
+	if (ret)
+		return ret;
+
+skip_modem:
 
 	pm_runtime_set_active(dev);
 	ret = devm_pm_runtime_enable(dev);

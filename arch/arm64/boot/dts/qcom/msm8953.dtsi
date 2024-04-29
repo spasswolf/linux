@@ -2548,11 +2548,12 @@
 
 		ipa: ipa@7900000 {
 			compatible = "qcom,ipa-lite-v2.6";
-			reg = <0x7900000 0x47000>;
+			reg = <0x07940000 0x5000>,
+			      <0x07945000 0x2000>;
+			reg-names = "ipa-reg", "ipa-shared";
 			clocks = <&rpmcc RPM_SMD_IPA_CLK>;
-			interrupts = <GIC_SPI 228 IRQ_TYPE_EDGE_RISING>,
-				     <GIC_SPI 230 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-names = "ipa", "dma";
+			interrupts = <GIC_SPI 228 IRQ_TYPE_EDGE_RISING>;
+			interrupt-names = "ipa";
 			interconnects = <&snoc MAS_IPA RPM_ACTIVE_TAG
 					 &bimc SLV_EBI RPM_ACTIVE_TAG>,
 					<&snoc MAS_IPA RPM_ACTIVE_TAG
@@ -2560,8 +2561,32 @@
 					<&bimc MAS_APPS_PROC RPM_ACTIVE_TAG
 					 &pcnoc SLV_IPA_CFG RPM_ACTIVE_TAG>;
 			interconnect-names = "ipa-mem", "ipa-imem", "cpu-cfg";
-			iommus = <&apps_iommu 0x18>;
+
+			dmas = <&ipa_bam 0>, <&ipa_bam 1>, <&ipa_bam 2>, <&ipa_bam 3>, <&ipa_bam 4>, <&ipa_bam 5>;
+			//       <&ipa_bam 6>, <&ipa_bam 7>, <&ipa_bam 8>, <&ipa_bam 9>;
+			dma-names = "test_tx", "test_rx", "ap_lan_rx", "cmd_tx", "ap_modem_tx", "ap_modem_rx";
+			//	    "modem_lan_tx", "modem_cmd_tx", "modem_lan_rx", "modem_ap_rx";
+			// FIXME: How can we make IPA work with BAM and IOMMU?
+			// currently it works either without the iommu entries in the bam and ipa_bam nodes
+			// or with iommu.passthrough=1 on the kernel cmdline (this seems to break venus probe)
+			//iommus = <&apps_iommu 0x18>;
 			modem-remoteproc = <&mpss>;
+		};
+
+		ipa_bam: dma@7904000 {
+			compatible = "qcom,bam-v1.7.0";
+			reg = <0x07904000 0x26934>;
+			interrupts = <GIC_SPI 230 IRQ_TYPE_LEVEL_HIGH>;
+			/* FIXME: use mem_clk */
+			clocks = <&rpmcc RPM_SMD_IPA_CLK>;
+			clock-names = "bam_clk";
+			#dma-cells = <1>;
+			qcom,ee = <0>;
+			// FIXME: How can we make IPA work with BAM and IOMMU?
+			// currently it works either without the iommu entries in the bam and ipa_bam nodes
+			// or with iommu.passthrough=1 on the kernel cmdline (this seems to break venus probe)
+			//iommus = <&apps_iommu 0x18>;
+			status = "okay";
 		};
 
 		i2c_4: i2c@78b8000 {
