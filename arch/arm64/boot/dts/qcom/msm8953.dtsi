@@ -976,7 +976,7 @@
 		compatible = "simple-bus";
 
 		rpm_msg_ram: sram@60000 {
-			compatible = "qcom,rpm-msg-ram";
+			compatible = "qcom,rpm-msg-ram", "mmio-sram";
 			reg = <0x00060000 0x8000>;
 			#address-cells = <1>;
 			#size-cells = <1>;
