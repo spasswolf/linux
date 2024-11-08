@@ -1074,6 +1074,7 @@ static int qcom_smd_create_device(struct qcom_smd_channel *channel)
 	struct qcom_smd_device *qsdev;
 	struct rpmsg_device *rpdev;
 	struct qcom_smd_edge *edge = channel->edge;
+	int ret;
 
 	dev_dbg(&edge->dev, "registering '%s'\n", channel->name);
 
@@ -1097,7 +1098,19 @@ static int qcom_smd_create_device(struct qcom_smd_channel *channel)
 	rpdev->dev.parent = &edge->dev;
 	rpdev->dev.release = qcom_smd_release_device;
 
-	return rpmsg_register_device(rpdev);
+	ret = rpmsg_register_device(rpdev);
+	/*
+	 * Declare all channels as wakeup capable, but don't enable
+	 * waking up by default.
+	 *
+	 * Userspace may wish to be woken up for incoming messages on a
+	 * specific channel, for example to handle incoming calls or SMS
+	 * messages on the IPCRTR channel. This can be done be enabling
+	 * the wakeup source via sysfs.
+	 */
+	device_set_wakeup_capable(&rpdev->dev, true);
+
+	return ret;
 }
 
 static int qcom_smd_create_chrdev(struct qcom_smd_edge *edge)
@@ -1415,7 +1428,7 @@ static int qcom_smd_parse_edge(struct device *dev,
 	}
 
 	ret = devm_request_irq(dev, irq,
-			       qcom_smd_edge_intr, IRQF_TRIGGER_RISING,
+			       qcom_smd_edge_intr, IRQF_NO_SUSPEND | IRQF_TRIGGER_RISING,
 			       node->name, edge);
 	if (ret) {
 		dev_err(dev, "failed to request smd irq\n");

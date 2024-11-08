@@ -28,7 +28,7 @@ static void qcom_mhi_qrtr_dl_callback(struct mhi_device *mhi_dev,
 		return;
 
 	rc = qrtr_endpoint_post(&qdev->ep, mhi_res->buf_addr,
-				mhi_res->bytes_xferd);
+				mhi_res->bytes_xferd, NULL);
 	if (rc == -EINVAL)
 		dev_err(qdev->dev, "invalid ipcrouter packet\n");
 }

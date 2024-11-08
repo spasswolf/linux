@@ -7,6 +7,7 @@
 #include <linux/module.h>
 #include <linux/skbuff.h>
 #include <linux/rpmsg.h>
+#include <linux/pm_wakeup.h>
 
 #include "qrtr.h"
 
@@ -22,16 +23,22 @@ static int qcom_smd_qrtr_callback(struct rpmsg_device *rpdev,
 {
 	struct qrtr_smd_dev *qdev = dev_get_drvdata(&rpdev->dev);
 	int rc;
+	u32 src_port = 0;
 
 	if (!qdev)
 		return -EAGAIN;
 
-	rc = qrtr_endpoint_post(&qdev->ep, data, len);
+	rc = qrtr_endpoint_post(&qdev->ep, data, len, &src_port);
 	if (rc == -EINVAL) {
 		dev_err(qdev->dev, "invalid ipcrouter packet\n");
 		/* return 0 to let smd drop the packet */
 		rc = 0;
+		return rc;
 	}
+
+	if (src_port == 39 || // Voice service port given by qrtr-lookup. This works!
+	    src_port == 52)   // Wirless messaging service port given by qrtr-lookup. Not tested yet.
+		pm_wakeup_ws_event(rpdev->dev.power.wakeup, 0, true);
 
 	return rc;
 }

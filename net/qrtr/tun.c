@@ -105,7 +105,7 @@ static ssize_t qrtr_tun_write_iter(struct kiocb *iocb, struct iov_iter *from)
 		return -EFAULT;
 	}
 
-	ret = qrtr_endpoint_post(&tun->ep, kbuf, len);
+	ret = qrtr_endpoint_post(&tun->ep, kbuf, len, NULL);
 
 	kfree(kbuf);
 	return ret < 0 ? ret : len;

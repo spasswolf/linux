@@ -429,10 +429,13 @@ static void qrtr_node_assign(struct qrtr_node *node, unsigned int nid)
  * @ep: endpoint handle
  * @data: data pointer
  * @len: size of data in bytes
+ * @src_port: report src_port back to smd callback function
+ *            to decide about wakeup 
  *
  * Return: 0 on success; negative error code on failure
  */
-int qrtr_endpoint_post(struct qrtr_endpoint *ep, const void *data, size_t len)
+int qrtr_endpoint_post(struct qrtr_endpoint *ep, const void *data, size_t len,
+		       u32 *src_port)
 {
 	struct qrtr_node *node = ep->node;
 	const struct qrtr_hdr_v1 *v1;
@@ -496,6 +499,9 @@ int qrtr_endpoint_post(struct qrtr_endpoint *ep, const void *data, size_t len)
 		pr_err("qrtr: Invalid version %d\n", ver);
 		goto err;
 	}
+
+	if (src_port)
+		*src_port = cb->src_port;
 
 	if (cb->dst_port == QRTR_PORT_CTRL_LEGACY)
 		cb->dst_port = QRTR_PORT_CTRL;
