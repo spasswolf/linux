@@ -302,7 +302,6 @@ static void aw8898_container_update(struct aw8898 *aw8898,
     for(i=0; i<aw8898_cont->len; i+=4) {
         reg_addr = (aw8898_cont->data[i+1]<<8) + aw8898_cont->data[i+0];
         reg_val = (aw8898_cont->data[i+3]<<8) + aw8898_cont->data[i+2];
-        pr_info("%s: reg=0x%04x, val = 0x%04x\n", __func__, reg_addr, reg_val);
         aw8898_i2c_write(aw8898, (unsigned char)reg_addr, (unsigned int)reg_val);
     }
 
@@ -323,10 +322,6 @@ static void aw8898_cfg_loaded(const struct firmware *cont, void *context)
 
     pr_info("%s: loaded %s - size: %zu\n", __func__, aw8898_cfg_name,
             cont ? cont->size : 0);
-
-    for(i=0; i<cont->size; i++) {
-        pr_info("%s: addr:0x%04x, data:0x%02x\n", __func__, i, *(cont->data+i));
-    }
 
     aw8898_cfg = kzalloc(cont->size+sizeof(int), GFP_KERNEL);
     if (!aw8898_cfg) {
