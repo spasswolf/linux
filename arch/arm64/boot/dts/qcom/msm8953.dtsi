@@ -1442,19 +1442,19 @@
 			};
 
 			cdc_pdm_lines_act: pdm-lines-on-pins {
-					pins = "gpio69", "gpio73", "gpio74";
+					pins = "gpio69", "gpio74";
 					function = "cdc_pdm0";
 					drive-strength = <8>;
 			};
 			cdc_pdm_lines_sus: pdm-lines-off-pins {
-					pins = "gpio69", "gpio73", "gpio74";
+					pins = "gpio69", "gpio74";
 					function = "cdc_pdm0";
 					drive-strength = <2>;
 					bias-disable;
 			};
 
 			cdc_pdm_comp_lines_act: pdm-comp-lines-on-pins {
-					pins = "gpio67", "gpio68";
+					pins = "gpio68";
 					function = "cdc_pdm0";
 					drive-strength = <8>;
 			};
