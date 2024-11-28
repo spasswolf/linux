@@ -3198,8 +3198,7 @@
 
 		slim@c140000 {
 			compatible = "qcom,slim-ngd-v1.5.0";
-			reg = <0xc140000 0x2c0000>;
-			reg-names = "ctrl";
+			reg = <0xc140000 0x2c000>;
 			interrupts = <GIC_SPI 163 IRQ_TYPE_LEVEL_HIGH>;
 			dmas =	<&slimbam 3>, <&slimbam 4>;
 			dma-names = "rx", "tx";
