@@ -407,8 +407,10 @@
 	model = "fairphone-fp3";
 
 	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&cdc_pdm_lines_act &cdc_pdm_lines_2_act &cdc_pdm_comp_lines_act &tlmm_pri_act &tlmm_pri_ws_act>;
-	pinctrl-1 = <&cdc_pdm_lines_sus &cdc_pdm_lines_2_sus &cdc_pdm_comp_lines_act &tlmm_pri_sus &tlmm_pri_ws_sus>;
+	//pinctrl-0 = <&cdc_pdm_lines_act &cdc_pdm_lines_2_act &cdc_pdm_comp_lines_act &tlmm_pri_act &tlmm_pri_ws_act>;
+	//pinctrl-1 = <&cdc_pdm_lines_sus &cdc_pdm_lines_2_sus &cdc_pdm_comp_lines_act &tlmm_pri_sus &tlmm_pri_ws_sus>;
+	pinctrl-0 = <&tlmm_pri_act &tlmm_pri_ws_act>;
+	pinctrl-1 = <&tlmm_pri_sus &tlmm_pri_ws_sus>;
 
 	status = "okay";
 
@@ -436,10 +438,10 @@
 };
 
 &wcd9335 {
-	clock-names = "mclk"; //, "slimbus";
+	clock-names = "mclk", "slimbus";
 	// FIXME
-	clocks = <&rpmcc RPM_SMD_DIV_CLK2>; //, // pm8953 gpio1 cdc_pm_mclk1
-		 //<&rpmcc RPM_SMD_BB_CLK1>; // gpio70 SLIMBUS_CLK
+	clocks = <&rpmcc RPM_SMD_DIV_CLK2>, //, // pm8953 gpio1 cdc_pm_mclk1
+		 <&rpmcc RPM_SMD_BB_CLK1>; // gpio70 SLIMBUS_CLK
 	// mclk2 would be gpio66 function pri_mi2s
 
 	vdd-buck-supply = <&wcd_vout_1p8>;
