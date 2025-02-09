@@ -5,6 +5,7 @@
 /dts-v1/;
 
 #include <dt-bindings/leds/common.h>
+#include <dt-bindings/sound/qcom,wcd9335.h>
 #include "sdm632.dtsi"
 #include "pm8953.dtsi"
 #include "pmi632.dtsi"
@@ -24,6 +25,16 @@
 
 	chosen {
 		stdout-path = "serial0:115200n8";
+	};
+
+	divclk1_cdc: divclk1 {
+		compatible = "gpio-gate-clock";
+		clocks = <&rpmcc RPM_SMD_DIV_CLK2>;
+		#clock-cells = <0>;
+		enable-gpios = <&pm8953_gpios 1 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "active", "sleep";
+		pinctrl-0 = <&tasha_mclk_default>;
+		pinctrl-1 = <&tasha_mclk_default>;
 	};
 
 	gpio-keys {
@@ -50,7 +61,25 @@
 		regulator-max-microvolt = <1800000>;
 		gpio = <&tlmm 50 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
-		vin-supply = <&pm8953_s4>;
+		//regulator-allow-set-load; // from msm8996
+		//regulator-always-on; // does this help or break things? 
+				     // For the downstream kernel this is needed
+				     // and removing it kills the soundcard.
+				     // In the mainline kernel this only seems to
+				     // lead to an earlier probe of wcd9335 codec,
+				     // the slim errors and the efuse error remain.
+		vin-supply = <&pm8953_s4>; // Do we need this?
+	};
+};
+
+&pm8953_gpios {
+	tasha_mclk_default: tasha_mclk_default {
+		pins = "gpio1";
+		function = "func1";
+		drive-strength = <2>;
+		power-source = <0>;
+		bias-disable;
+		output-low;
 	};
 };
 
@@ -262,8 +291,11 @@
 			regulator-max-microvolt = <1240000>;
 		};
 		pm8953_s4: s4 {
-			regulator-min-microvolt = <1036000>;
+			//regulator-min-microvolt = <1036000>;
+			regulator-min-microvolt = <1800000>; // min voltage from downstream: 1.9V
 			regulator-max-microvolt = <2040000>;
+			//regulator-always-on; // TEST
+			//enable-active-high;
 		};
 		pm8953_s5: s5 {
 			regulator-min-microvolt = <1036000>;
@@ -428,6 +460,36 @@
 			sound-dai = <&aw8898>;
 		};
 	};
+
+	slim-dai-link {
+		link-name = "SLIM Playback";
+		cpu {
+			sound-dai = <&q6afedai SLIMBUS_0_RX>; // dowstream uses SLIMBUS_0_{RX,TX} for voice
+		};
+
+		platform {
+			sound-dai = <&q6routing>;
+		};
+
+		codec {
+			sound-dai = <&wcd9335 AIF1_PB>; // FIXME?
+		};
+	};
+
+	slimcap-dai-link {
+		link-name = "SLIM Capture";
+		cpu {
+			sound-dai = <&q6afedai SLIMBUS_0_TX>;  // dowstream uses SLIMBUS_0_{RX,TX} for voice
+		};
+
+		platform {
+			sound-dai = <&q6routing>;
+		};
+
+		codec {
+			sound-dai = <&wcd9335 AIF1_CAP>; // FIXME?
+		};
+	};
 };
 
 &q6afedai {
@@ -440,15 +502,21 @@
 &wcd9335 {
 	clock-names = "mclk", "slimbus";
 	// FIXME
-	clocks = <&rpmcc RPM_SMD_DIV_CLK2>, //, // pm8953 gpio1 cdc_pm_mclk1
-		 <&rpmcc RPM_SMD_BB_CLK1>; // gpio70 SLIMBUS_CLK
+	clocks = <&divclk1_cdc>, //, // pm8953 gpio1 cdc_pm_mclk1
+		 //<&rpmcc RPM_SMD_BB_CLK1>; // gpio70 SLIMBUS_CLK
+		 <&rpmcc RPM_SMD_DIV_CLK2>; // downstream works without a second clock
 	// mclk2 would be gpio66 function pri_mi2s
 
+	//vdd-buck-supply = <&pm8953_s4>; // This doesn't work here (on downstream it does)
 	vdd-buck-supply = <&wcd_vout_1p8>;
 	vdd-buck-sido-supply = <&wcd_vout_1p8>; // VDD_SIDO ?
+	//vdd-buck-sido-supply = <&pm8953_s4>; // VDD_SIDO ?
 	vdd-rx-supply = <&wcd_vout_1p8>;
+	//vdd-rx-supply = <&pm8953_s4>;
 	vdd-tx-supply = <&wcd_vout_1p8>;
+	//vdd-tx-supply = <&pm8953_s4>;
 	//vdd-vbat-supply = <&>;
 	vdd-micbias-supply = <&vph_pwr>;
 	vdd-io-supply = <&wcd_vout_1p8>;
+	//vdd-io-supply = <&pm8953_s4>;
 };

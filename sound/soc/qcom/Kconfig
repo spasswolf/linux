@@ -159,6 +159,18 @@ config SND_SOC_MSM8996
 	  APQ8096 SoC-based systems.
 	  Say Y if you want to use audio device on this SoCs
 
+config SND_SOC_MSM8953
+	tristate "SoC Machine driver for MSM8953 boards"
+	depends on QCOM_APR
+	depends on COMMON_CLK
+	select SND_SOC_QDSP6
+	select SND_SOC_QCOM_COMMON
+	select SND_SOC_WCD9335
+	help
+	  Support for msm8953 audio on e. g. fairphone-fp3. This
+	  is an experimental alternative to SND_SOC_APQ8016_SBC.
+	  Say Y if you want to use audio device on this SoCs.
+
 config SND_SOC_SDM845
 	tristate "SoC Machine driver for SDM845 boards"
 	depends on QCOM_APR && I2C && SOUNDWIRE

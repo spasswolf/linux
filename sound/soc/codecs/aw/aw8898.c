@@ -241,7 +241,7 @@ static void aw8898_run_pwd(struct aw8898 *aw8898, bool pwd)
 
 static void aw8898_spk_rcv_mode(struct aw8898 *aw8898)
 {
-    pr_debug("%s spk_rcv=%d\n", __func__, aw8898->spk_rcv_mode);
+    pr_info("%s spk_rcv=%d\n", __func__, aw8898->spk_rcv_mode);
 
     if(aw8898->spk_rcv_mode == AW8898_SPEAKER_MODE) {
         aw8898_i2c_write_bits(aw8898, AW8898_REG_SYSCTRL,
@@ -268,7 +268,7 @@ static void aw8898_start(struct aw8898 *aw8898)
         aw8898_i2c_read(aw8898, AW8898_REG_SYSST, &reg_val);
         if(reg_val & AW8898_BIT_SYSST_PLLS) {
               aw8898_run_mute(aw8898, false);
-              pr_debug("%s iis signal check pass!\n", __func__);
+              pr_info("%s iis signal check pass! reg_val = 0x%x\n", __func__, reg_val);
 #ifdef AW8898_VBAT_MONITOR
             aw8898_vbat_monitor_start(aw8898);
 #endif
@@ -281,7 +281,7 @@ static void aw8898_start(struct aw8898 *aw8898)
 }
 static void aw8898_stop(struct aw8898 *aw8898)
 {
-    pr_debug("%s enter\n", __func__);
+    pr_info("%s enter\n", __func__);
 
     aw8898_run_mute(aw8898, true);
     aw8898_run_pwd(aw8898, true);
@@ -297,7 +297,7 @@ static void aw8898_container_update(struct aw8898 *aw8898,
     int reg_addr = 0;
     int reg_val = 0;
 
-    pr_debug("%s enter\n", __func__);
+    pr_info("%s enter\n", __func__);
 
     for(i=0; i<aw8898_cont->len; i+=4) {
         reg_addr = (aw8898_cont->data[i+1]<<8) + aw8898_cont->data[i+0];
@@ -442,7 +442,7 @@ static int aw8898_volume_put(struct snd_kcontrol *kcontrol,struct snd_ctl_elem_v
     //smartpa have clk
     aw8898_i2c_read(aw8898, AW8898_REG_SYSST, &reg_value);
     if(!(reg_value&AW8898_BIT_SYSST_PLLS)){
-      pr_err("%s: NO I2S CLK ,cat not write reg \n",__func__);
+      pr_err("%s: NO I2S CLK ,cat not write reg, reg_value = 0x%x\n",__func__, reg_value);
       return 0;
     }
     //cal real value
@@ -750,6 +750,7 @@ static void aw8898_shutdown(struct snd_pcm_substream *substream,
     struct aw8898 *aw8898 = snd_soc_component_get_drvdata(dai->component);
 
     aw8898->rate = 0;
+    pr_info("%s\n", __func__);
     aw8898_run_pwd(aw8898, true);
 }
 

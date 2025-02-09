@@ -2948,7 +2948,7 @@
 		};
 
 		sound_card: sound-card@c051000 {
-			compatible = "qcom,msm8953-qdsp6-sndcard";
+			compatible = "qcom,msm8953-qdsp6-sndcard-alt";
 			reg = <0xc051000 0x4>,
 			      <0xc051004 0x4>,
 			      <0xc055000 0x4>,
@@ -3189,11 +3189,11 @@
 			compatible = "qcom,bam-v1.7.0";
 			qcom,controlled-remotely;
 			reg = <0xc104000 0x2a000>;
-			num-channels  = <23>;
+			num-channels  = <23>; // 23 is reported by downstream
 			interrupts = <GIC_SPI 180 IRQ_TYPE_LEVEL_HIGH>;
 			#dma-cells = <1>;
 			qcom,ee = <1>;
-			qcom,num-ees = <2>;
+			qcom,num-ees = <3>;
 		};
 
 		slim@c140000 {
@@ -3206,8 +3206,8 @@
 			#size-cells = <0>;
 			ngd@1 {
 				reg = <1>;
-				#address-cells = <1>;
-				#size-cells = <1>;
+				#address-cells = <2>;
+				#size-cells = <0>;
 
 				tasha_ifd: tas-ifd {
 					compatible = "slim217,1a0";
